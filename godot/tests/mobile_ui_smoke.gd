@@ -128,6 +128,9 @@ func menu_checks() -> void:
         var rect: Rect2 = button.get_global_rect()
         check(rect.position.x >= 0 and rect.end.x <= viewport_size.x and rect.position.y >= 0 and rect.end.y <= viewport_size.y, "Menu/badge button outside viewport")
         check(rect.size.y * root.size.y / viewport_size.y >= 44, "Menu/badge target smaller than 44px")
+    for y in [0.0, 1.21]:
+        var candle_at: Vector2 = scene.camera.unproject_position(scene.candle.global_position + Vector3(0, y, 0))
+        check(not scene.badge_button.get_global_rect().has_point(candle_at), "Badge panel obscures the candle")
     scene.menus.badge_details()
     await process_frame
     check(scene.menus.visible and scene.menus.screen == "badge", "Badge explanation missing")

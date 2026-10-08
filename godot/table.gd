@@ -634,6 +634,8 @@ func build_ui() -> void:
             menus.pause()
     )
     badge_button = Button.new()
+    badge_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    badge_button.clip_text = true
     style_button(badge_button)
     badge_button.add_theme_font_size_override("font_size", 16)
     root.add_child(badge_button)
@@ -661,13 +663,22 @@ func resize_camera() -> void:
     camera.fov = 50
     camera.look_at(Vector3(0, 0, 0.8 if landscape else 0.0))
     title_label.visible = not landscape
-    header_ui.offset_right = -108
+    header_ui.offset_right = -size.x * 0.52 if landscape else -108
     header_ui.offset_top = 12 if landscape else 24
     bottom_ui.offset_top = -145 if landscape else -170
     bottom_ui.offset_bottom = -20 if landscape else -28
-    badge_button.offset_top = 90 if landscape else 155
-    badge_button.offset_bottom = badge_button.offset_top + 68
-    badge_button.offset_right = -get_viewport().get_visible_rect().size.x * 0.55 if landscape else -24
+    if landscape:
+        badge_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+        badge_button.offset_left = size.x * 0.55
+        badge_button.offset_right = -108
+        badge_button.offset_top = 12
+        badge_button.offset_bottom = 80
+    else:
+        badge_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+        badge_button.offset_left = 24
+        badge_button.offset_right = -24
+        badge_button.offset_top = -270
+        badge_button.offset_bottom = -202
     menu_button.offset_top = 12 if landscape else 18
     menu_button.offset_bottom = menu_button.offset_top + 68
     cancel_tap()
