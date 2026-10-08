@@ -19,8 +19,10 @@ are boxes; rendered edges are rounded. Low tray borders have tall invisible
 collision extensions to prevent lost dice. The tray is deliberately explicit
 in this first prototype and can be removed after judging throw framing.
 
-Meshes, textures, wood shader and impact sound are generated locally. No game
-assets are copied from KCD2. Godot's default font supports Cyrillic. No external
+Dice meshes/textures, wood shader and impact sound are generated locally. The
+wood surface reuses a crop of our existing generated tavern artwork; the font
+is the existing DejaVu Serif (license: `assets/FONT-LICENSE.txt`). No game
+assets are copied from KCD2. No external
 resources, WebView, Node runtime or network permissions are used by the APK.
 
 The separate **Godot table prototype** GitHub Actions workflow exports a debug

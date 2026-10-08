@@ -52,7 +52,15 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
-          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --export-debug Android ../build/Kosti-Godot-prototype.apk
+          if ! Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --export-debug Android ../build/Kosti-Godot-prototype.apk > "$RUNNER_TEMP/godot-export.log" 2>&1; then
+            cat "$RUNNER_TEMP/godot-export.log"
+            echo '### Godot export diagnostics' >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            tail -100 "$RUNNER_TEMP/godot-export.log" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/godot-export.log"
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify build/Kosti-Godot-prototype.apk
       - uses: actions/upload-artifact@v6
         with:

@@ -3,6 +3,8 @@ extends Node3D
 
 const Die = preload("res://die.gd")
 const WOOD = preload("res://wood.gdshader")
+const SERIF = preload("res://assets/serif.ttf")
+const TAVERN = preload("res://assets/tavern.jpg")
 var dice: Array[RigidBody3D] = []
 var rng := RandomNumberGenerator.new()
 var camera: Camera3D
@@ -18,7 +20,7 @@ var impact_stream: AudioStreamWAV
 var impact_players: Array[AudioStreamPlayer3D] = []
 var impact_cursor := 0
 var rolls := 0
-var die_mesh: ArrayMesh
+var bottom_ui: VBoxContainer
 
 func _ready() -> void:
     rng.randomize()
@@ -75,7 +77,16 @@ func collision_box(size: Vector3, at: Vector3) -> StaticBody3D:
     return body
 
 func build_table() -> void:
-    box(self, Vector3(40, 0.26, 40), Vector3(0, -0.13, 0), wood())
+    var tabletop_material := wood()
+    # Only the clean wood portion of our existing generated artwork is used.
+    var source := TAVERN.get_image()
+    var region := Rect2i(int(source.get_width() * 0.18), int(source.get_height() * 0.40),
+        int(source.get_width() * 0.70), int(source.get_height() * 0.50))
+    var grain := source.get_region(region)
+    grain.generate_mipmaps()
+    tabletop_material.set_shader_parameter("table_grain", ImageTexture.create_from_image(grain))
+    tabletop_material.set_shader_parameter("use_texture", true)
+    box(self, Vector3(40, 0.26, 40), Vector3(0, -0.13, 0), tabletop_material)
     collision_box(Vector3(16, 0.3, 14), Vector3(0, -0.15, 0))
     # Low wooden edging; tall invisible continuation prevents escaped dice.
     for x in [-2.7, 2.7]:
@@ -185,6 +196,7 @@ func play_impact(at: Vector3, speed: float) -> void:
 func label(text: String, size: int, color: Color) -> Label:
     var node := Label.new()
     node.text = text
+    node.add_theme_font_override("font", SERIF)
     node.add_theme_font_size_override("font_size", size)
     node.add_theme_color_override("font_color", color)
     node.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
@@ -195,7 +207,8 @@ func label(text: String, size: int, color: Color) -> Label:
     return node
 
 func style_button(button: Button) -> void:
-    button.custom_minimum_size = Vector2(0, 64)
+    button.custom_minimum_size = Vector2(0, 68)
+    button.add_theme_font_override("font", SERIF)
     button.add_theme_font_size_override("font_size", 24)
     button.add_theme_color_override("font_color", Color(0.94, 0.83, 0.59))
     for state in ["normal", "hover", "pressed", "disabled", "focus"]:
@@ -226,6 +239,7 @@ func build_ui() -> void:
     header.add_child(label("КОСТИ У ТРАКТА", 27, Color(0.87, 0.74, 0.48)))
     header.add_child(label("СТОЛ · ПРОТОТИП GODOT", 14, Color(0.64, 0.55, 0.38)))
     var bottom := VBoxContainer.new()
+    bottom_ui = bottom
     root.add_child(bottom)
     bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
     bottom.offset_left = 24
@@ -261,9 +275,17 @@ func build_ui() -> void:
     )
 
 func resize_camera() -> void:
+    var window := get_window()
+    var landscape := window.size.x > window.size.y
+    var reference := Vector2i(960, 540) if landscape else Vector2i(540, 960)
+    if window.content_scale_size != reference:
+        window.content_scale_size = reference
     var size := get_viewport().get_visible_rect().size
     var aspect := size.x / size.y
-    camera.fov = 50 if aspect < 1 else 42
+    camera.fov = 50
+    camera.look_at(Vector3(0, 0, 0.8 if landscape else 0.0))
+    bottom_ui.offset_top = -145 if landscape else -170
+    bottom_ui.offset_bottom = -20 if landscape else -28
     # Portrait sees the same whole tray, including very narrow phones.
     if aspect < 0.56:
         camera.fov = rad_to_deg(2 * atan(tan(deg_to_rad(25.0)) * 0.56 / aspect))
