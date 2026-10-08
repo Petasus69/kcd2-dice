@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#20170f"><meta name="color-scheme" content="dark"><title>Кости — У тракта</title><link rel="icon" href="assets/icon.svg"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="scene"></div><div class="vignette"></div>
+<main id="app">
+ <section id="home" class="screen home">
+  <header class="home-top"><span class="smallcaps">БОГЕМИЯ · 1403</span><button class="icon-button" id="settings-home" aria-label="Настройки">⚙</button></header>
+  <div class="title-block"><div class="ornament">❦</div><h1>Кости</h1><div class="subtitle"><span></span>У ТРАКТА<span></span></div><p class="motto">Ещё один бросок. Или пора забрать своё?</p></div>
+  <div class="hero-dice"><canvas id="home-dice" aria-label="Игральные кости на столе"></canvas></div>
+  <div class="home-actions"><button id="continue" class="button gold" hidden>Продолжить партию</button><button id="new-game" class="button gold">Сесть за стол <span>→</span></button><div class="home-secondary"><button id="equipment" class="button">Мои кости</button><button id="rules-home" class="button">Правила</button></div></div>
+  <footer class="home-foot"><span id="purse">◉ 500 грошей</span><span id="stats">0 побед · 0 партий</span><div class="footnote">По правилам костей Kingdom Come: Deliverance II</div></footer>
+ </section>
+ <section id="play" class="screen play" hidden>
+  <header class="game-top"><button class="icon-button" id="game-menu" aria-label="Меню партии">☰</button><div><span class="smallcaps" id="contract-label"></span><div class="goal">ЦЕЛЬ <b id="goal"></b></div></div><button class="icon-button" id="rules-game" aria-label="Правила">?</button></header>
+  <div class="scoreboard"><div class="score-card" id="score-0"><div class="player-name"></div><div class="score-number">0</div><div class="score-track"><i></i></div><div class="player-badge"></div></div><div class="versus">✦</div><div class="score-card" id="score-1"><div class="player-name"></div><div class="score-number">0</div><div class="score-track"><i></i></div><div class="player-badge"></div></div></div>
+  <div class="turn-heading"><span id="turn-label" class="smallcaps"></span><h2 id="status"></h2><p id="instruction"></p></div>
+  <div class="table-area" id="table-area"><canvas id="dice-canvas" aria-label="Кости текущего броска"></canvas><div id="dice-accessibility" class="sr-only"></div><div class="table-watermark">❦</div><div class="held-label" id="held-label"></div></div>
+  <div class="game-bottom"><div class="turn-summary"><div><span class="smallcaps">ЗА ХОД</span><strong id="turn-points">0</strong></div><span class="summary-divider"></span><div><span class="smallcaps">ВЫБРАНО</span><strong id="selection-points">—</strong></div><button class="badge-button" id="use-badge"><span id="badge-symbol"></span><small id="badge-remaining"></small></button></div><div class="combo-line" id="combo-line"></div><div class="action-row"><button class="button" id="bank">Забрать очки</button><button class="button gold" id="roll">Бросить кости</button></div><div class="table-footer"><button id="hint">Подсказать</button><span id="stake-label"></span><button id="journal">Ход партии</button></div></div>
+ </section>
+</main>
+<div id="modal" class="modal" hidden><div class="modal-shade"></div><section class="parchment" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header><div><span class="smallcaps" id="modal-kicker">У ТРАКТА</span><h2 id="modal-title"></h2></div><button class="close" id="close-modal" aria-label="Закрыть">×</button></header><div id="modal-body" class="modal-body"></div></section></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script type="module" src="ui.js"></script></body></html>
