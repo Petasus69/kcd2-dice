@@ -1,7 +1,8 @@
 shader_type spatial;
 render_mode diffuse_burley;
 uniform vec4 wood_color : source_color = vec4(0.27, 0.15, 0.075, 1.0);
-uniform sampler2D table_grain : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D table_grain : source_color, filter_linear_mipmap, repeat_disable;
+uniform sampler2D table_normal : hint_normal, filter_linear_mipmap, repeat_disable;
 uniform bool use_texture = false;
 varying vec2 tabletop;
 
@@ -27,10 +28,12 @@ void fragment() {
         + hash(vec2(board, 8.0)) * 0.10) * mix(0.35, 1.0, seam);
     ALBEDO = wood_color.rgb * tone + vec3(0.022, 0.017, 0.010) * scratches;
     if (use_texture) {
-        vec2 coordinates = tabletop * 0.075 + vec2(0.5);
+        vec2 coordinates = tabletop * 0.13 + vec2(0.5);
         // Mirror the outer repeats: no abrupt diagonal texture seams in wide views.
         vec2 mirrored = 1.0 - abs(fract(coordinates * 0.5) * 2.0 - 1.0);
-        ALBEDO = texture(table_grain, mirrored).rgb * 0.7;
+        ALBEDO = texture(table_grain, mirrored).rgb * 0.58;
+        NORMAL_MAP = texture(table_normal, mirrored).rgb;
+        NORMAL_MAP_DEPTH = 0.16;
     }
     ROUGHNESS = 0.79 + grain * 0.15;
 }

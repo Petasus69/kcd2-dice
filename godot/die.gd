@@ -17,17 +17,18 @@ static var shared_mesh: ArrayMesh
 var last_impact := -1.0
 var selected := false
 var ring: MeshInstance3D
+var visual: MeshInstance3D
 
 func _ready() -> void:
     mass = 0.028
-    linear_damp = 0.65
-    angular_damp = 0.85
+    linear_damp = 0.42
+    angular_damp = 0.55
     continuous_cd = true
     contact_monitor = true
     max_contacts_reported = 6
     physics_material_override = PhysicsMaterial.new()
     physics_material_override.friction = 0.78
-    physics_material_override.bounce = 0.24
+    physics_material_override.bounce = 0.30
     var collider := CollisionShape3D.new()
     var shape := BoxShape3D.new()
     shape.size = Vector3.ONE * SIZE
@@ -35,10 +36,40 @@ func _ready() -> void:
     add_child(collider)
     if shared_mesh == null:
         shared_mesh = make_mesh()
-    var visual := MeshInstance3D.new()
+    visual = MeshInstance3D.new()
     visual.mesh = shared_mesh
     add_child(visual)
+    ring = MeshInstance3D.new()
+    var ring_mesh := TorusMesh.new()
+    ring_mesh.inner_radius = 0.46
+    ring_mesh.outer_radius = 0.49
+    ring_mesh.rings = 32
+    ring_mesh.ring_segments = 8
+    ring.mesh = ring_mesh
+    var ring_material := StandardMaterial3D.new()
+    ring_material.albedo_color = Color(0.15, 0.78, 0.87)
+    ring_material.emission_enabled = true
+    ring_material.emission = Color(0.08, 0.45, 0.52)
+    ring.material_override = ring_material
+    ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    ring.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+    add_child(ring)
+    ring.top_level = true
+    ring.visible = false
     body_entered.connect(_contact)
+
+func set_selected(value: bool) -> void:
+    selected = value
+    ring.visible = value
+    if selected:
+        update_ring()
+
+func update_ring() -> void:
+    ring.global_transform = Transform3D(Basis.IDENTITY, Vector3(global_position.x, 0.137, global_position.z))
+
+func _process(_delta: float) -> void:
+    if selected:
+        update_ring()
 
 func _contact(_body: Node) -> void:
     var now := Time.get_ticks_msec() / 1000.0

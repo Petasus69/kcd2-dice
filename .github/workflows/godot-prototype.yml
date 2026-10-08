@@ -14,6 +14,9 @@ jobs:
       GODOT_VERSION: 4.6.3
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -33,10 +36,22 @@ jobs:
           curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o "$RUNNER_TEMP/templates.tpz"
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           unzip -j -q "$RUNNER_TEMP/templates.tpz" 'templates/android_debug.apk' 'templates/version.txt' -d "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-      - name: Import and test native physics
+      - name: Import, compare JS rules and test native physics
         run: |
           Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --editor --import
+          node godot/tests/export_rule_fixtures.mjs "$RUNNER_TEMP/rules-fixtures.json"
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --script tests/rules_parity.gd -- "$RUNNER_TEMP/rules-fixtures.json"
           Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/physics_smoke.gd
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/game_scene_smoke.gd
+      - name: Test mobile layout, prop framing and touch controls
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          if ! command -v xvfb-run >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb xauth libgl1-mesa-dri
+          fi
+          xvfb-run -a Godot_v${GODOT_VERSION}-stable_linux.x86_64 --path godot --audio-driver Dummy --script tests/mobile_ui_smoke.gd
       - name: Configure Android export and build APK
         shell: bash
         run: |

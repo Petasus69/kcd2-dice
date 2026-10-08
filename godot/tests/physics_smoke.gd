@@ -15,6 +15,7 @@ func require(condition: bool, message: String) -> void:
 func run() -> void:
     scene = load("res://table.tscn").instantiate()
     root.add_child(scene)
+    scene.sandbox_mode = true
     await process_frame
     require(scene.dice.size() == 6, "Expected six actual rigid bodies")
     # Check the mapping independently of throw outcomes.
@@ -30,6 +31,9 @@ func run() -> void:
         for die in scene.dice:
             previous.append(die.position)
         scene.throw_dice()
+        for pose in scene.launch_poses:
+            require(pose.velocity.z <= -5.4 and pose.velocity.length() >= 5.4,
+                "Throw must be strong and directed away from the camera/player")
         require(scene.throwing and scene.roll_button.disabled, "Repeated throw guard failed")
         scene.throw_dice()
         for i in range(6):
