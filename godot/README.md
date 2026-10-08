@@ -15,7 +15,11 @@ godot --headless --path godot --fixed-fps 90 --script tests/physics_smoke.gd
 Touch **Бросить кости** (desktop: Space). The Android app supports both portrait
 and landscape rotation with an adapted UI. All six dice are actual rigid bodies;
 their upper faces are read from the final orientation, not preselected or
-animated into place. A small physical nudge can free a cocked die. Colliders
+animated into place. A smooth 0.48s pickup preserves their current poses; a
+0.22s accelerating swing hands each die to physics 35ms apart, with matching
+position and velocity. Physics interpolation smooths rendering between ticks.
+Pickup collisions are disabled only until release. No hand model is included.
+A small physical nudge can free a cocked die. Colliders
 are boxes; rendered edges are rounded. Low tray borders have tall invisible
 collision extensions to prevent lost dice. The tray is deliberately explicit
 in this first prototype and can be removed after judging throw framing.

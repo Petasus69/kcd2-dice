@@ -30,6 +30,10 @@ func run() -> void:
         await process_frame
     assert(scene.throwing, "Throw button did not start a throw")
     await create_timer(0.32).timeout
+    await capture("pickup")
+    await create_timer(0.32).timeout
+    await capture("swing")
+    await create_timer(0.32).timeout
     await capture("throw")
     while scene.throwing:
         await process_frame

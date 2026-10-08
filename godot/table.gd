@@ -15,6 +15,12 @@ var sound_button: Button
 var throwing := false
 var elapsed := 0.0
 var quiet_time := 0.0
+const PICKUP_DURATION := 0.48
+const SWING_DURATION := 0.22
+const RELEASE_SPACING := 0.035
+var preparing := false
+var preparation_time := 0.0
+var launch_poses: Array[Dictionary] = []
 var sound_enabled := true
 var impact_stream: AudioStreamWAV
 var impact_players: Array[AudioStreamPlayer3D] = []
@@ -298,27 +304,76 @@ func throw_dice() -> void:
     quiet_time = 0
     rolls += 1
     roll_button.disabled = true
-    status.text = "Бросок…"
+    status.text = "Подготовка броска…"
     result_label.text = ""
+    preparing = true
+    preparation_time = 0.0
+    launch_poses.clear()
     for i in range(dice.size()):
         var die := dice[i]
-        # Separate launch positions keep colliders from intersecting at spawn.
+        # Preserve the visible pose. Pickup is animated, never a teleport.
+        var velocity := Vector3(rng.randf_range(2.1, 3.4), rng.randf_range(0.2, 0.7), rng.randf_range(-0.7, 0.7))
+        var spin := Vector3(rng.randf_range(-10, 10), rng.randf_range(-8, 8), rng.randf_range(-10, 10))
+        var release := Vector3(-1.8 + (i % 2), 1.25 + (i / 2) * 0.15, -1.1 + (i / 2))
+        launch_poses.append({
+            "start": die.position,
+            "rotation": die.quaternion,
+            "windup": release - velocity * SWING_DURATION * 0.5,
+            "velocity": velocity,
+            "spin": spin,
+            "layer": die.collision_layer,
+            "mask": die.collision_mask,
+            "released": false,
+        })
         die.freeze = true
-        die.position = Vector3(-1.8 + (i % 2) * 1.0, 1.7 + (i / 2) * 0.18, -1.1 + (i / 2) * 1.0)
-        die.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
+        # Scripted pickup must not push or hit dice still lying on the table.
+        die.collision_layer = 0
+        die.collision_mask = 0
         die.linear_velocity = Vector3.ZERO
         die.angular_velocity = Vector3.ZERO
-    # Let the physics server receive all transform resets before impulses.
-    await get_tree().physics_frame
+
+func animate_preparation(delta: float) -> void:
+    preparation_time += delta
+    var all_released := true
     for i in range(dice.size()):
+        var pose := launch_poses[i]
+        if pose.released:
+            continue
         var die := dice[i]
-        die.freeze = false
-        die.sleeping = false
-        die.linear_velocity = Vector3(rng.randf_range(2.1, 3.4), rng.randf_range(0.2, 1.2), rng.randf_range(-0.7, 0.7))
-        die.angular_velocity = Vector3(rng.randf_range(-15, 15), rng.randf_range(-12, 12), rng.randf_range(-15, 15))
+        if preparation_time < PICKUP_DURATION:
+            var u := clampf(preparation_time / PICKUP_DURATION, 0, 1)
+            # Zero speed and acceleration at both ends of the pickup.
+            var eased := u * u * u * (u * (u * 6.0 - 15.0) + 10.0)
+            die.position = (pose.start as Vector3).lerp(pose.windup, eased)
+            die.position.y += 0.18 * pow(sin(PI * u), 2.0)
+        else:
+            var u := clampf((preparation_time - PICKUP_DURATION - i * RELEASE_SPACING) / SWING_DURATION, 0, 1)
+            # Integral of smoothstep velocity: the release pose has exactly
+            # the same linear/angular speed as the rigid body that takes over.
+            var travel := SWING_DURATION * (u * u * u - 0.5 * u * u * u * u)
+            die.position = pose.windup + pose.velocity * travel
+            var spin: Vector3 = pose.spin
+            die.quaternion = Quaternion(spin.normalized(), spin.length() * travel) * pose.rotation
+            if u >= 1.0:
+                pose.released = true
+                die.collision_layer = pose.layer
+                die.collision_mask = pose.mask
+                die.freeze = false
+                die.sleeping = false
+                die.linear_velocity = pose.velocity
+                die.angular_velocity = pose.spin
+                status.text = "Бросок…"
+        if not pose.released:
+            all_released = false
+    if all_released:
+        preparing = false
+        launch_poses.clear()
 
 func _physics_process(delta: float) -> void:
     if not throwing:
+        return
+    if preparing:
+        animate_preparation(delta)
         return
     elapsed += delta
     var still := true
