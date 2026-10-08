@@ -8,7 +8,16 @@ Prompt: cinematic realistic 3D-rendered view of a 15th-century Bohemian tavern g
 
 ## Dice
 
-Original cube geometry and procedural rendering in `web/renderer.js`. No extracted game assets.
+Original rounded cube geometry, face textures and WebGL rendering in
+`web/table-scene.js`. Pips use procedural colour and bump textures; special
+faces have hand-drawn symbols. The table surface reuses a crop of the generated
+tavern background. No extracted game assets.
+
+## Renderer library
+
+Three.js 0.160.1, MIT, bundled in `web/vendor/three.module.min.js`.
+License: `web/vendor/LICENSE`. Source and verification: `web/vendor/README.md`.
+All modules and textures load locally; no runtime CDN requests.
 
 ## Font
 

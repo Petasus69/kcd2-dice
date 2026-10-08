@@ -1,4 +1,5 @@
 import {dieById} from './data.js';
+import {TableScene} from './table-scene.js';
 const PIPS={1:[[0,0]],2:[[-.5,-.5],[.5,.5]],3:[[-.5,-.5],[0,0],[.5,.5]],4:[[-.5,-.5],[.5,-.5],[-.5,.5],[.5,.5]],5:[[-.5,-.5],[.5,-.5],[0,0],[-.5,.5],[.5,.5]],6:[[-.5,-.5],[.5,-.5],[-.5,0],[.5,0],[-.5,.5],[.5,.5]]};
 const MATERIALS={bone:[201,181,130],amber:[213,163,48],dark:[102,73,44],red:[131,55,38],blue:[83,112,131],green:[105,117,64]};
 const REFERENCE_MATERIALS={ordinary:'dark',antioch:'amber',shrinking:'blue',unbalanced:'green',even:'amber',holy:'amber'};
@@ -15,7 +16,7 @@ const FACES=[
 ];
 // Opposite faces always sum to 7. Swap front with the requested face.
 function faceValue(face,value){const target=value===0||value===7?1:value;if(target===1)return face;if(face===1)return target;if(face===target)return 1;if(face===6)return 7-target;if(face===7-target)return 6;return face;}
-export class DiceRenderer{
+class CanvasDiceRenderer{
  constructor(canvas,onPick=()=>{}){
   this.canvas=canvas;this.ctx=canvas.getContext('2d');this.onPick=onPick;this.dice=[];this.held=[];this.selected=new Set();this.animation=null;this.frame=null;this.width=0;this.height=0;
   this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);
@@ -60,6 +61,18 @@ export class DiceRenderer{
  animate(indices,duration=900){
   if(this.animation){cancelAnimationFrame(this.frame);this.animation.resolve();}
   return new Promise(resolve=>{this.animation={start:performance.now(),duration,indices:new Set(indices),seeds:this.dice.map(()=>Math.random()*5),resolve};this.frame=requestAnimationFrame(t=>this.draw(t));});
+ }
+}
+export class DiceRenderer{
+ constructor(canvas,onPick=()=>{},options={}){
+  let context;
+  try{context=canvas.getContext('webgl2',{antialias:true,alpha:canvas.id==='home-dice'})||canvas.getContext('webgl',{antialias:true,alpha:canvas.id==='home-dice'});
+   if(context&&typeof context.getParameter(context.VERSION)==='string')return new TableScene(canvas,context,onPick,{...options,table:canvas.id!=='home-dice'});
+  }catch(error){console.warn('WebGL table unavailable; using Canvas renderer.',error.message);}
+  // A canvas with an allocated GL context cannot switch to a 2D context.
+  if(context&&typeof context.getParameter(context.VERSION)==='string'){const replacement=canvas.cloneNode(true);canvas.replaceWith(replacement);canvas=replacement;}
+  if(canvas.id==='dice-canvas')document.body.dataset.tableRenderer='canvas';
+  const fallback=new CanvasDiceRenderer(canvas,onPick);fallback.backend='canvas';return fallback;
  }
 }
 export function diePortrait(id){const material=materialFor(id),base=MATERIALS[material]||MATERIALS.bone;const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="face" x2=".8" y2="1"><stop stop-color="${rgb(base,1.25)}"/><stop offset="1" stop-color="${rgb(base,.85)}"/></linearGradient></defs><ellipse cx="50" cy="83" rx="34" ry="8" fill="#20180d" opacity=".2"/><g stroke="${rgb(base,.45)}" stroke-width="2" stroke-linejoin="round"><path d="M16 31Q16 27 20 26L62 13Q65 12 68 15L85 37 43 54Z" fill="url(#face)"/><path d="M16 31L43 54 44 86Q41 88 38 85L14 64Z" fill="${rgb(base,.7)}"/><path d="M43 54L85 37 83 70Q82 73 78 75L44 86Z" fill="${rgb(base,.95)}"/></g><g fill="${material==='dark'?'#302013':'#443623'}" opacity=".85"><ellipse cx="34" cy="31" rx="4" ry="3"/><ellipse cx="51" cy="34" rx="4" ry="3"/><ellipse cx="66" cy="37" rx="4" ry="3"/><ellipse cx="27" cy="58" rx="3" ry="5" transform="rotate(-25 27 58)"/><ellipse cx="58" cy="63" rx="3" ry="4"/><ellipse cx="72" cy="58" rx="3" ry="4"/></g></svg>`;return `data:image/svg+xml,${encodeURIComponent(svg)}`;}

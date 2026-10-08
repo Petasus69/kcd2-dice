@@ -19,10 +19,15 @@ function sound(kind){
  }catch{}
 }
 function vibrate(kind='tap'){if(!profile.haptic)return;try{if(window.Android?.haptic)window.Android.haptic(kind);else navigator.vibrate?.(kind==='bust'?[40,30,40]:kind==='win'?[30,40,60]:15);}catch{}}
+function impact(strength){
+ if(!profile.sound)return;
+ try{audio??=new (window.AudioContext||window.webkitAudioContext)();const now=audio.currentTime,buffer=audio.createBuffer(1,Math.floor(audio.sampleRate*.07),audio.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.exp(-i/(data.length*.16));const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain();source.buffer=buffer;filter.type='lowpass';filter.frequency.value=650+strength*2000;gain.gain.value=.15*strength;source.connect(filter);filter.connect(gain);gain.connect(audio.destination);source.start(now);}catch{}
+}
+let lastImpactHaptic=0;
 const renderer=new DiceRenderer($('dice-canvas'),i=>{
  if(busy||!game||isAI()||!['select','bust'].includes(game.phase))return;
  selected.has(i)?selected.delete(i):selected.add(i);sound('tap');vibrate();update();
-});
+},{onImpact:strength=>{impact(strength);const now=performance.now();if(strength>.45&&now-lastImpactHaptic>180){lastImpactHaptic=now;vibrate();}}});
 const homeRenderer=new DiceRenderer($('home-dice'));
 homeRenderer.set([{id:'ordinary',value:5},{id:'weighted',value:1},{id:'lucky',value:3}]);
 function isAI(){return game?.mode==='ai'&&game.active===1;}
@@ -95,16 +100,17 @@ function update(){
  const automatic=['none','headstart','defence','formation','emperor','tyche'].includes(b.type);
  $('use-badge').disabled=busy||ai||!game.canBadge||automatic||!['select','bust'].includes(game.phase);$('use-badge').title=`${b.name}: ${b.desc}`;$('badge-symbol').textContent=b.icon||'—';$('badge-remaining').textContent=automatic?(b.tier?'∞':'—'):Math.max(0,b.uses-p.uses);
  $('held-label').textContent=game.held.length?`ЗАЧТЕНО КОСТЕЙ: ${game.held.length}`:'';
+ $('die-name').textContent=!busy&&selected.size===1?dieById(game.pool[[...selected][0]]?.id).name:'';
  renderer.set(game.pool,game.held,selected);
  $('dice-accessibility').innerHTML=game.pool.map((d,i)=>`<button data-access-die="${i}" aria-pressed="${selected.has(i)}">Кость ${i+1}: ${d.value===0?'дьявол':d.value}, ${dieById(d.id).name}</button>`).join('');
  $('dice-accessibility').querySelectorAll('button').forEach(el=>el.onclick=()=>{if(busy||ai||game.phase!=='select')return;const i=+el.dataset.accessDie;selected.has(i)?selected.delete(i):selected.add(i);update();});
 }
 function indices(mask){return game.pool.map((_,i)=>i).filter(i=>mask&(1<<i));}
-async function animateRoll(which){busy=true;update();sound('roll');await renderer.animate(which,profile.fast||matchMedia('(prefers-reduced-motion: reduce)').matches?250:850);busy=false;selected.clear();checkpoint();update();resolveChoice();}
+async function animateRoll(which){busy=true;update();if(renderer.backend==='webgl'&&profile.sound){try{audio??=new (window.AudioContext||window.webkitAudioContext)();audio.resume();}catch{}}else if(renderer.backend!=='webgl')sound('roll');await renderer.animate(which,matchMedia('(prefers-reduced-motion: reduce)').matches?100:profile.fast?500:1650);busy=false;selected.clear();checkpoint();update();resolveChoice();}
 async function humanRoll(){
  if(busy||isAI())return;
  try{if(game.phase==='bust'){const lost=game.total;game.bust();selected.clear();sound('bust');vibrate('bust');toast(`Очки хода сгорели: ${fmt(lost)}`);afterTurn();return;}
-  if(game.phase==='select')game.keep([...selected]);selected.clear();game.roll();await animateRoll(game.pool.map((_,i)=>i));
+  if(game.phase==='select'){game.keep([...selected]);if(renderer.waitForIdle){busy=true;update();await renderer.waitForIdle();}}selected.clear();game.roll();await animateRoll(game.pool.map((_,i)=>i));
  }catch(e){busy=false;toast(e.message);update();}
 }
 function humanBank(){if(busy||isAI())return;try{game.bank(game.phase==='select'?[...selected]:[]);selected.clear();sound('bank');vibrate();afterTurn();}catch(e){toast(e.message);}}
@@ -121,14 +127,14 @@ $('use-badge').onclick=()=>{
  if(busy||isAI())return;
  const b=game.badge;
  openModal(b.name,`<p>${b.desc}</p><p class="muted">${selected.size?`Выбрано костей: ${selected.size}`:'Для переброса или превращения выберите кости на столе до применения бляхи.'}</p>${b.type==='jester'?'<label><span>Новое значение</span><select id="badge-value">'+[1,2,3,4,5,6].map(v=>`<option>${v}</option>`).join('')+'</select></label>':''}<button id="confirm-badge" class="button gold">Применить бляху</button>`,{kicker:`ОСТАЛОСЬ ПРИМЕНЕНИЙ: ${b.uses-game.player.uses}`});
- $('confirm-badge').onclick=async()=>{try{const chosen=+($('badge-value')?.value||1);game.useBadge([...selected],chosen);closeModal(true);vibrate();if(['fortune','swap','might','resurrection'].includes(b.type))await animateRoll(game.pool.map((_,i)=>i));else{checkpoint();update();}}catch(e){toast(e.message);}};
+ $('confirm-badge').onclick=async()=>{try{const chosen=+($('badge-value')?.value||1),picked=[...selected];game.useBadge(picked,chosen);closeModal(true);vibrate();if(['fortune','swap','might','resurrection'].includes(b.type))await animateRoll(['fortune','swap'].includes(b.type)?picked:b.type==='might'?[game.pool.length-1]:game.pool.map((_,i)=>i));else{checkpoint();update();}}catch(e){toast(e.message);}};
 };
 function afterTurn(){checkpoint();update();if(game.phase==='over'){result();return;}if(isAI())scheduleAI();else if(game.mode==='local')openModal('Передайте телефон',`<div class="result"><p>Следующий ход: <b>${esc(game.player.name)}</b></p><button class="button gold" id="handoff">Я готов</button></div>`,{closable:false,kicker:'ЗА СТОЛОМ ДВОЕ'}),$('handoff').onclick=()=>closeModal(true);}
 function scheduleAI(){clearTimeout(aiTimer);if(!isAI()||screen!=='game'||!$('modal').hidden||busy||game.phase==='over')return;aiTimer=setTimeout(aiStep,profile.fast?180:700);}
 async function aiStep(){
  if(!isAI()||screen!=='game'||!$('modal').hidden||busy)return;
  try{
-  if(game.phase==='ready'){game.roll();await animateRoll(game.pool.map((_,i)=>i));scheduleAI();return;}
+  if(game.phase==='ready'){if(renderer.waitForIdle){busy=true;await renderer.waitForIdle();busy=false;if(!isAI()||screen!=='game'||!$('modal').hidden)return;}game.roll();await animateRoll(game.pool.map((_,i)=>i));scheduleAI();return;}
   if(game.phase==='choose'){resolveChoice();update();scheduleAI();return;}
   if(game.phase==='bust'){
    if(game.badge.type==='resurrection'&&game.canBadge){game.useBadge();await animateRoll(game.pool.map((_,i)=>i));scheduleAI();return;}
@@ -149,7 +155,7 @@ function pauseMenu(){if(busy)return;clearTimeout(aiTimer);openModal('За игр
 $('settings-home').onclick=settings;$('journal').onclick=()=>openModal('Ход партии',game.history.length?game.history.map(t=>`<div class="journal-entry">${esc(t)}</div>`).join(''):'<p>Здесь появятся забранные очки и применения блях.</p>',{kicker:'ЛЕТОПИСЬ ВЕЧЕРА'});
 
 // Keep a small read-only hook for browser smoke tests.
-window.trakt={get game(){return game;},get profile(){return profile;},get busy(){return busy;},get positions(){return renderer.positions;}};
+window.trakt={get game(){return game;},get profile(){return profile;},get busy(){return busy;},get positions(){return renderer.positions;},get rendererBackend(){return renderer.backend;},get visibleFaces(){return renderer.visibleFaces;}};
 
 showHome();
 
