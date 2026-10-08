@@ -314,7 +314,9 @@ func throw_dice() -> void:
         # Preserve the visible pose. Pickup is animated, never a teleport.
         var velocity := Vector3(rng.randf_range(2.1, 3.4), rng.randf_range(0.2, 0.7), rng.randf_range(-0.7, 0.7))
         var spin := Vector3(rng.randf_range(-10, 10), rng.randf_range(-8, 8), rng.randf_range(-10, 10))
-        var release := Vector3(-1.8 + (i % 2), 1.25 + (i / 2) * 0.15, -1.1 + (i / 2))
+        # Keep the initial three-column formation through pickup so paths
+        # don't cross merely because the launch layout has a different shape.
+        var release := Vector3(-1.8 + (i % 3), 1.25 + (i / 3) * 0.15, -0.65 + (i / 3) * 1.3)
         launch_poses.append({
             "start": die.position,
             "rotation": die.quaternion,
