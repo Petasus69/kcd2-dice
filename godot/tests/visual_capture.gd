@@ -1,0 +1,48 @@
+extends SceneTree
+## Optional desktop capture harness; not included in Android exports.
+var scene: Node3D
+
+func _initialize() -> void:
+    call_deferred("run")
+
+func capture(name: String) -> void:
+    await RenderingServer.frame_post_draw
+    var output := OS.get_environment("KCD2_CAPTURE_DIR")
+    if output.is_empty():
+        output = "/tmp/kcd2-godot-preview"
+    DirAccess.make_dir_recursive_absolute(output)
+    root.get_texture().get_image().save_png(output.path_join(name + ".png"))
+
+func run() -> void:
+    scene = load("res://table.tscn").instantiate()
+    root.add_child(scene)
+    scene.rng.seed = 4851
+    await create_timer(1.0).timeout
+    await capture("table")
+    # Drive the real UI button, not just call the throw method.
+    var at: Vector2 = scene.roll_button.get_global_rect().get_center()
+    for pressed in [true, false]:
+        var event := InputEventMouseButton.new()
+        event.position = at
+        event.button_index = MOUSE_BUTTON_LEFT
+        event.pressed = pressed
+        root.push_input(event, true)
+        await process_frame
+    assert(scene.throwing, "Throw button did not start a throw")
+    await create_timer(0.32).timeout
+    await capture("throw")
+    while scene.throwing:
+        await process_frame
+    await create_timer(0.6).timeout
+    await capture("settled")
+    scene.throw_dice()
+    await create_timer(0.5).timeout
+    await capture("second-throw")
+    while scene.throwing:
+        await process_frame
+    await create_timer(1.0).timeout
+    await capture("second-settled")
+    print("PASS: real button input and rendered captures")
+    scene.queue_free()
+    await process_frame
+    quit(0)

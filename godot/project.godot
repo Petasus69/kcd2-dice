@@ -1,0 +1,27 @@
+; Standalone native prototype. Open this directory in Godot 4.6.3.
+config_version=5
+
+[application]
+config/name="Кости у тракта · Прототип"
+run/main_scene="res://table.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+
+[display]
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/size/window_width_override=540
+window/size/window_height_override=960
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+anti_aliasing/quality/msaa_3d=1
+environment/defaults/default_clear_color=Color(0.045, 0.035, 0.025, 1)
+
+[physics]
+common/physics_ticks_per_second=90
+3d/default_gravity=14.0

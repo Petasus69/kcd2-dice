@@ -1,0 +1,61 @@
+name: Godot table prototype
+on:
+  push:
+    branches: [prototype/godot-dice-table]
+    paths: ['godot/**', '.github/workflows/godot-prototype.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: 4.6.3
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.1.0' 'platform-tools'
+      - name: Install Godot and official export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          chmod +x "$RUNNER_TEMP/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          echo "$RUNNER_TEMP/godot-bin" >> "$GITHUB_PATH"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o "$RUNNER_TEMP/templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -j -q "$RUNNER_TEMP/templates.tpz" 'templates/android_debug.apk' 'templates/version.txt' -d "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+      - name: Import and test native physics
+        run: |
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --editor --import
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/physics_smoke.gd
+      - name: Configure Android export and build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot" build
+          keytool -genkeypair -keystore "$RUNNER_TEMP/godot-debug.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          cat > "$HOME/.config/godot/editor_settings-4.6.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$RUNNER_TEMP/godot-debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --export-debug Android ../build/Kosti-Godot-prototype.apk
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify build/Kosti-Godot-prototype.apk
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Kosti-Godot-prototype-apk
+          path: build/Kosti-Godot-prototype.apk
+          if-no-files-found: error

@@ -3,3 +3,5 @@ build/
 *.jks
 node_modules/
 .DS_Store
+godot/.godot/
+godot/export_credentials.cfg
