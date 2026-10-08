@@ -27,7 +27,10 @@ void fragment() {
         + hash(vec2(board, 8.0)) * 0.10) * mix(0.35, 1.0, seam);
     ALBEDO = wood_color.rgb * tone + vec3(0.022, 0.017, 0.010) * scratches;
     if (use_texture) {
-        ALBEDO = texture(table_grain, tabletop * 0.075 + vec2(0.5)).rgb * 0.7;
+        vec2 coordinates = tabletop * 0.075 + vec2(0.5);
+        // Mirror the outer repeats: no abrupt diagonal texture seams in wide views.
+        vec2 mirrored = 1.0 - abs(fract(coordinates * 0.5) * 2.0 - 1.0);
+        ALBEDO = texture(table_grain, mirrored).rgb * 0.7;
     }
     ROUGHNESS = 0.79 + grain * 0.15;
 }

@@ -13,7 +13,7 @@ window/size/window_width_override=540
 window/size/window_height_override=960
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=4
+window/handheld/orientation=6
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
