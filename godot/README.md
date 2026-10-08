@@ -31,8 +31,8 @@ rigid-body orientations. Transmutation is explicitly a badge-driven, animated
 change to a fixed ordinary face, not a random throw. Unchosen dice remain fixed
 through a badge reroll. Settlement is idempotent, preventing duplicate rewards.
 
-Selection commits on finger/mouse **release**, not press. Twelve actual screen
-pixels of movement cancel the gesture; multitouch and emulated duplicate mouse
+Selection commits on finger/mouse **release**, not press. Twelve screen pixels
+(density-adjusted on Android) of movement cancel the gesture; multitouch and emulated duplicate mouse
 events cannot toggle twice. Picking uses the rendered interpolated cube bounds,
 padded touch areas and nearest-centre disambiguation. GUI, animation and AI turns
 block table touches; rings and optional Android haptics confirm selection.

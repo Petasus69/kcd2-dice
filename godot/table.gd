@@ -67,6 +67,11 @@ var badge_retry: Array[int] = []
 func table_interactive() -> bool:
     return not throwing and not collecting and not menus.visible and not (game.mode == "ai" and game.active == 1) and game.phase in ["select", "bust"]
 
+func touch_pixel_scale() -> float:
+    # Android touch slop must be density-independent: 12 pixels on a dense
+    # 1080px phone would otherwise reject ordinary finger jitter.
+    return clampf(DisplayServer.screen_get_dpi() / 160.0, 1.0, 4.0) if OS.get_name() == "Android" else 1.0
+
 func cancel_tap() -> void:
     tap_pointer = -2
     tap_candidate = -1
@@ -87,7 +92,7 @@ func _input(event: InputEvent) -> void:
             cancel_tap()
     elif event is InputEventScreenDrag or event is InputEventMouseMotion:
         var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
-        if tap_pointer != -2 and ((event.position - tap_origin) * ratio).length() > 12:
+        if tap_pointer != -2 and ((event.position - tap_origin) * ratio).length() > 12 * touch_pixel_scale():
             tap_cancelled = true
 
 func die_at(at: Vector2) -> int:
@@ -105,10 +110,10 @@ func die_at(at: Vector2) -> int:
             for y in [-0.33, 0.33]:
                 for z in [-0.33, 0.33]:
                     rect = rect.expand(camera.unproject_position(pose * Vector3(x, y, z)))
-        var padding := Vector2(12, 12) / ratio
+        var padding := Vector2(12, 12) * touch_pixel_scale() / ratio
         rect = rect.grow_individual(padding.x, padding.y, padding.x, padding.y)
         var distance := ((center - at) * ratio).length()
-        if (rect.has_point(at) or distance <= 24) and distance < nearest:
+        if (rect.has_point(at) or distance <= 24 * touch_pixel_scale()) and distance < nearest:
             nearest = distance
             result = item.die
     return result
@@ -756,7 +761,7 @@ func _unhandled_input(event: InputEvent) -> void:
     elif event is InputEventScreenDrag or event is InputEventMouseMotion:
         at = event.position
         var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
-        if tap_pointer != -2 and ((at - tap_origin) * ratio).length() > 12:
+        if tap_pointer != -2 and ((at - tap_origin) * ratio).length() > 12 * touch_pixel_scale():
             tap_cancelled = true
         return
     else:
@@ -774,7 +779,7 @@ func _unhandled_input(event: InputEvent) -> void:
         tap_cancelled = false
     elif up and pointer == tap_pointer:
         var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
-        if not tap_cancelled and ((at - tap_origin) * ratio).length() <= 12 and die_at(at) == tap_candidate:
+        if not tap_cancelled and ((at - tap_origin) * ratio).length() <= 12 * touch_pixel_scale() and die_at(at) == tap_candidate:
             toggle_die(tap_candidate)
         cancel_tap()
 
