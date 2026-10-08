@@ -43,6 +43,7 @@ jobs:
           Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --script tests/rules_parity.gd -- "$RUNNER_TEMP/rules-fixtures.json"
           Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/physics_smoke.gd
           Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/game_scene_smoke.gd
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/mechanics_smoke.gd
       - name: Test mobile layout, prop framing and touch controls
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'

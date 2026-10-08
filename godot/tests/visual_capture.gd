@@ -15,8 +15,16 @@ func capture(name: String) -> void:
 
 func run() -> void:
     scene = load("res://table.tscn").instantiate()
+    scene.testing = true
     root.add_child(scene)
     scene.rng.seed = 4851
+    scene.menus.home()
+    await create_timer(0.6).timeout
+    await capture("home")
+    scene.menus.setup()
+    await create_timer(0.6).timeout
+    await capture("setup")
+    scene.start_match(1, 4, 0, ["Генри", "Тереза"], ["double-1", "fortune-1"], false)
     await create_timer(1.0).timeout
     await capture("table")
     # Drive the real UI button, not just call the throw method.
@@ -69,6 +77,9 @@ func run() -> void:
         scene.bank_action()
         await create_timer(0.5).timeout
         await capture("banked")
+        scene.menus.handoff()
+        await create_timer(0.7).timeout
+        await capture("handoff")
     print("PASS: real button input and rendered captures")
     scene.queue_free()
     await process_frame

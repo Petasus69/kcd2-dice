@@ -1,9 +1,9 @@
 extends RefCounted
-## Port of web/engine.js scoreDice, without badge modifiers in this stage.
+## Port of web/engine.js scoreDice, including ordinary-die badge modifiers.
 ## Every selected die must be part of a scoring group from THIS throw.
 
-static func score_dice(values: Array) -> Variant:
-    if values.is_empty() or values.size() > 7:
+static func score_dice(values: Array, badge: Dictionary = {}) -> Variant:
+    if values.is_empty() or values.size() > 9:
         return null
     var normalized: Array = []
     for value in values:
@@ -32,13 +32,17 @@ static func score_dice(values: Array) -> Variant:
                     if value != face:
                         same = false
                 if same:
-                    groups.append({"mask": mask, "points": (1000 if face == 1 else face * 100) * (1 << (count - 3)),
+                    var multiplier := 3 if badge.get("type") == "emperor" and face == 1 else (2 if badge.get("type") == "tyche" and face == 6 else 1)
+                    groups.append({"mask": mask, "points": (1000 if face == 1 else face * 100) * (1 << (count - 3)) * multiplier,
                         "label": "%d × %d" % [count, face]})
-        for pattern in [
+        var patterns := [
             {"values": [1, 2, 3, 4, 5], "points": 500, "label": "Ряд 1–5"},
             {"values": [2, 3, 4, 5, 6], "points": 750, "label": "Ряд 2–6"},
             {"values": [1, 2, 3, 4, 5, 6], "points": 1500, "label": "Ряд 1–6"},
-        ]:
+        ]
+        if badge.has("formation"):
+            patterns.append({"values": badge.formation, "points": badge.points, "label": badge.name})
+        for pattern in patterns:
             if count != pattern.values.size():
                 continue
             var unique: Array = []
@@ -65,14 +69,14 @@ static func solve(mask: int, groups: Array[Dictionary], memo: Dictionary) -> Var
     memo[mask] = best
     return best
 
-static func scoring_options(values: Array) -> Array[Dictionary]:
+static func scoring_options(values: Array, badge: Dictionary = {}) -> Array[Dictionary]:
     var options: Array[Dictionary] = []
     for mask in range(1, 1 << values.size()):
         var subset: Array = []
         for i in range(values.size()):
             if mask & (1 << i):
                 subset.append(values[i])
-        var score: Variant = score_dice(subset)
+        var score: Variant = score_dice(subset, badge)
         if score != null:
             options.append({"mask": mask, "points": score.points, "count": subset.size()})
     options.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:

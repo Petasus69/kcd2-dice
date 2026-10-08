@@ -1,31 +1,47 @@
-# Native Godot prototype · 0.2.0
+# Native Godot prototype · 0.3.0
 
 Separate Godot 4.6.3 **Compatibility** project on `prototype/godot-dice-table`.
 The web game and `main` remain unchanged.
 
-## First mechanics migration
+## Mechanics migration
 
-A complete local match for **two human players**, goal 2000, six ordinary dice:
+- Local two-player matches with editable names and explicit phone handoff;
+  AI matches with four opponents and the previous engine's risk thresholds.
+- Separate blue/red score cards, active-player marker and name, pending points
+  labelled **Под риском**, selected points, and contextual **Зачесть / Бросить N**
+  and **Забрать X** actions. Kept dice never merge across throws.
+- Eight tables/contracts, goals 1500–5000, badge ranks, training without wagers,
+  virtual purse, stake deduction, payouts, trophy/lost badges and win statistics.
+  No real-money gambling or network connection.
+- All badge mechanics that work with ordinary dice: reroll, extra dice (up to
+  nine), resurrection, animated transmutation, throw/turn multipliers, formations,
+  Emperor, Tyche, defence and headstart. Limits are per match, not per turn.
+- Collection, badge explanations, rules, journal, sound/haptic/AI-speed settings,
+  pause, surrender confirmation, atomic profile saves and continuing a match.
+  Scores, badge uses, held faces and pending points survive loading. An interrupted
+  throw restarts its physical animation; it does not commit moving dice as results.
+  Interrupted badge rerolls repeat only affected dice without another charge.
 
-- Touch dice to select/deselect them; cyan rings and selected points provide feedback.
-- **Переброс** keeps the selected scoring combination and rolls only the remainder.
-- **Сохранить** banks the selected combination plus this turn's accumulated points,
-  then passes the turn. This means banking points, not a persistent app save.
-- A bust loses unbanked turn points, never previously banked scores. **Далее** starts
-  the next player's turn. Keeping all dice enables another full six-die throw.
-- Victory occurs only when banking; **Новая партия** resets the match.
+**Loaded/special dice and the jester badge are deliberately excluded.** All
+opponents currently have six ordinary dice. Choosing exact loaded probabilities
+and synchronising them with physical animation is a separate design task.
 
-`rules.gd` and `game_state.gd` port the ordinary-die rules from `web/engine.js`,
-including exact partitions, singles, doubled multiples and straights. Kept dice
-from different throws never combine into new triples. No three-pairs/full-house
-bonus is invented. The scorer also understands wildcard formations for future
-migration, but **loaded/special dice, badges, AI, inventory, economy, contracts
-and save/resume are not yet exposed or ported**.
+Ordinary throws, fortune/swap, resurrection and extra-die rolls use observed
+rigid-body orientations. Transmutation is explicitly a badge-driven, animated
+change to a fixed ordinary face, not a random throw. Unchosen dice remain fixed
+through a badge reroll. Settlement is idempotent, preventing duplicate rewards.
 
-`tests/export_rule_fixtures.mjs` generates its oracle directly from the unchanged
-web engine: 3003 multiset scoring cases and 32 scenarios (including 30 complete
-matches). Native tests compare 663 state transitions, invalid actions, hot dice,
-busts and victory. Do not regenerate expected rules by hand.
+Selection commits on finger/mouse **release**, not press. Twelve actual screen
+pixels of movement cancel the gesture; multitouch and emulated duplicate mouse
+events cannot toggle twice. Picking uses the rendered interpolated cube bounds,
+padded touch areas and nearest-centre disambiguation. GUI, animation and AI turns
+block table touches; rings and optional Android haptics confirm selection.
+
+`rules.gd` / `game_state.gd` port `web/engine.js`; shared badge/contract/opponent
+metadata in `catalog.json` is generated with `node godot/tests/export_catalog.mjs`.
+There is no invented three-pairs/full-house bonus. Oracle fixtures come directly
+from the unchanged JS engine: **34,419 scoring cases, 66 scenarios, 753 state
+transitions**, plus AI choices at four risk levels and exact save round-trips.
 
 ## Native scene
 
@@ -63,14 +79,21 @@ node godot/tests/export_rule_fixtures.mjs /tmp/kcd2-rules-fixtures.json
 godot --headless --path godot --script tests/rules_parity.gd -- /tmp/kcd2-rules-fixtures.json
 godot --headless --path godot --fixed-fps 90 --script tests/physics_smoke.gd
 godot --headless --path godot --fixed-fps 90 --script tests/game_scene_smoke.gd
+godot --headless --path godot --fixed-fps 90 --script tests/mechanics_smoke.gd
 godot --path godot --script tests/mobile_ui_smoke.gd # Requires a display
 godot --path godot
 ```
 
-The **Godot table prototype** Actions workflow verifies rule parity, physics and
-scene integration before exporting/signing the APK with official templates,
+The **Godot table prototype** Actions workflow verifies rule/AI parity, physical
+badge effects, stakes, settlement, save/resume, scene integration, repeated native
+touches, GUI blocking, menus and four mobile layouts before exporting/signing the APK with official templates,
 Java 17 and Android SDK. Artifact: `Kosti-Godot-prototype-apk`, Android 7.0+,
 ARM32/ARM64. Package ID differs from the web version, so both apps coexist.
 Debug signing keys currently change per build: uninstall only the previous
 Godot prototype before installing the next APK. Real-device frame rate and
-appearance still need evaluation; desktop tests use software OpenGL.
+appearance and OS-level touch delivery still need evaluation on Android;
+desktop tests use software OpenGL and synthetic native touch events.
+
+Profile: `user://profile-v03.json`, isolated from the web version. Atomic saves
+use a temporary sibling file then rename. Malformed profiles are not silently
+overwritten. Tests use temporary files under `/tmp`, never the app's user profile.

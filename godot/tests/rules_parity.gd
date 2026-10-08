@@ -10,7 +10,7 @@ func check(condition: bool, message: String) -> void:
             push_error(message)
 
 func normalize_json(value: Variant) -> Variant:
-    if value is float:
+    if value is float and value == floor(value):
         return int(value)
     if value is Array:
         return value.map(normalize_json)
@@ -34,9 +34,14 @@ func _initialize() -> void:
             (actual != null and item.points != null and actual.points == item.points),
             "Scoring differs from JS for %s: %s expected %s" % [item.values, actual, item.points])
     var transitions := 0
+    for item in fixtures.badgeScores:
+        var actual: Variant = Rules.score_dice(item.values, Game.Catalog.badge(item.badge))
+        check((actual == null and item.points == null) or (actual != null and actual.points == item.points), "Badge scoring differs: %s %s" % [item.badge, item.values])
     for scenario in fixtures.scenarios:
         var game = Game.new()
         game.goal = int(scenario.goal)
+        if scenario.has("badges"):
+            game.configure(scenario.badges)
         for step in scenario.steps:
             var okay := true
             match step.type:
@@ -45,6 +50,13 @@ func _initialize() -> void:
                 "keep": okay = game.keep(step.indices)
                 "bank": okay = game.bank(step.indices)
                 "bust": okay = game.bust()
+                "badge":
+                    var action: Dictionary = game.use_badge(step.indices)
+                    okay = not action.is_empty()
+                    if action.has("partial"):
+                        okay = okay and game.finish_roll(step.values)
+                    elif action.get("roll", false):
+                        okay = okay and not game.begin_roll().is_empty() and game.finish_roll(step.values)
             check(okay, "Native action rejected: %s %s" % [scenario.name, step.type])
             var expected: Dictionary = step.expected
             check(game.scores == expected.scores and game.active == expected.active and
@@ -53,6 +65,14 @@ func _initialize() -> void:
                 game.turn_points == expected.turn_points and game.winner == expected.winner,
                 "State differs from JS after %s / %s" % [scenario.name, step.type])
             transitions += 1
+            check(game.uses == expected.uses and game.disabled == expected.disabled and game.multiplier == expected.multiplier and game.last_multiplier == expected.last_multiplier and game.extra == expected.extra, "Badge state differs: %s" % scenario.name)
+            var restored: Variant = Game.restore(normalize_json(JSON.parse_string(JSON.stringify(game.snapshot()))))
+            check(restored != null and restored.snapshot() == game.snapshot(), "Snapshot did not round-trip exactly")
+            for choice in expected.choices:
+                game.risk = float(choice.risk)
+                var actual: Dictionary = game.ai_choice()
+                check(actual.mask == choice.mask and actual.points == choice.points and actual.bank == choice.bank, "AI differs from JS: %s risk %s" % [scenario.name, choice.risk])
+            game.risk = 1.0
     var game = Game.new()
     check(game.begin_roll().size() == 6, "Initial roll")
     check(not game.finish_roll([1, 2]), "Wrong-length roll must be rejected")
@@ -65,5 +85,5 @@ func _initialize() -> void:
             "Invalid selection mutated state")
     check(game.begin_roll().is_empty(), "Reroll must require keeping scoring dice")
     print("%s: %d scores, %d JS/native transitions, invalid actions" % [
-        "PASS" if failures == 0 else "FAIL", fixtures.scores.size(), transitions])
+        "PASS" if failures == 0 else "FAIL", fixtures.scores.size() + fixtures.badgeScores.size(), transitions])
     quit(0 if failures == 0 else 1)

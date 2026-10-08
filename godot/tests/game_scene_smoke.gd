@@ -36,6 +36,7 @@ func finish_throw() -> void:
 
 func run() -> void:
     scene = load("res://table.tscn").instantiate()
+    scene.testing = true
     root.add_child(scene)
     await process_frame
     scene.rng.seed = 25003
@@ -76,7 +77,7 @@ func run() -> void:
     await finish_throw()
     check(scene.rolling_dice.size() == 6 and scene.game.held.is_empty() and scene.game.turn_points == 1500,
         "Hot dice integration failed")
-    for die in scene.dice:
+    for die in scene.dice.slice(0, 6):
         check(die.visual.scale.is_equal_approx(Vector3.ONE) and die.collision_layer == 1,
             "Hot dice kept the parked scale/collision state")
     await show_roll([1, 1, 1, 1, 2, 3])

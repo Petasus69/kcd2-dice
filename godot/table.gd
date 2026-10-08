@@ -1,5 +1,5 @@
 extends Node3D
-## Native local match: ordinary-die rules + physically observed throw results.
+## Native match controller: physical ordinary dice, AI, badges, menus and saves.
 
 const Die = preload("res://die.gd")
 const WOOD = preload("res://wood.gdshader")
@@ -45,6 +45,73 @@ var board_mesh: MeshInstance3D
 const BOARD_HEIGHT := 0.12
 var sandbox_mode := false # Physics-only harness, never enabled in the app.
 var needs_retry := false
+var tap_pointer := -2
+var tap_origin := Vector2.ZERO
+var tap_candidate := -1
+var tap_cancelled := false
+var testing := false
+const Catalog = preload("res://catalog.gd")
+const Profile = preload("res://profile.gd")
+const Menus = preload("res://menus.gd")
+var profile = Profile.new()
+var menus: Control
+var match_open := false
+var badge_button: Button
+var menu_button: Button
+var cards: Array[PanelContainer] = []
+var card_labels: Array[Label] = []
+var ai_wait := 0.0
+var ai_acting := false
+var badge_retry: Array[int] = []
+
+func table_interactive() -> bool:
+    return not throwing and not collecting and not menus.visible and not (game.mode == "ai" and game.active == 1) and game.phase in ["select", "bust"]
+
+func cancel_tap() -> void:
+    tap_pointer = -2
+    tap_candidate = -1
+    tap_cancelled = true
+
+func over_interface(at: Vector2) -> bool:
+    return menus.visible or bottom_ui.get_global_rect().has_point(at) or header_ui.get_global_rect().has_point(at) or menu_button.get_global_rect().has_point(at) or (badge_button.visible and badge_button.get_global_rect().has_point(at))
+
+func _input(event: InputEvent) -> void:
+    # A release over a Control never reaches _unhandled_input. Clear the
+    # pending table tap here so the next touch cannot inherit its pointer.
+    if menus == null:
+        return
+    if event is InputEventScreenTouch and event.pressed and tap_pointer != -2 and event.index != tap_pointer:
+        tap_cancelled = true
+    if event is InputEventScreenTouch or event is InputEventMouseButton:
+        if not event.pressed and over_interface(event.position):
+            cancel_tap()
+    elif event is InputEventScreenDrag or event is InputEventMouseMotion:
+        var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
+        if tap_pointer != -2 and ((event.position - tap_origin) * ratio).length() > 12:
+            tap_cancelled = true
+
+func die_at(at: Vector2) -> int:
+    # Match the rendered (interpolated) cube, rather than a potentially older
+    # physics-ray pose. Padding is measured in actual screen pixels.
+    var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
+    var nearest := INF
+    var result := -1
+    for item in game.pool:
+        var die := dice[item.die]
+        var pose := die.get_global_transform_interpolated()
+        var center := camera.unproject_position(pose.origin)
+        var rect := Rect2(center, Vector2.ZERO)
+        for x in [-0.33, 0.33]:
+            for y in [-0.33, 0.33]:
+                for z in [-0.33, 0.33]:
+                    rect = rect.expand(camera.unproject_position(pose * Vector3(x, y, z)))
+        var padding := Vector2(12, 12) / ratio
+        rect = rect.grow_individual(padding.x, padding.y, padding.x, padding.y)
+        var distance := ((center - at) * ratio).length()
+        if (rect.has_point(at) or distance <= 24) and distance < nearest:
+            nearest = distance
+            result = item.die
+    return result
 
 func _ready() -> void:
     rng.randomize()
@@ -53,16 +120,223 @@ func _ready() -> void:
     build_props()
     build_audio()
     build_ui()
-    for i in range(6):
+    for i in range(9):
         var die := Die.new()
         die.name = "Die%d" % (i + 1)
         add_child(die)
         die.position = Vector3((i % 3 - 1) * 1.1, BOARD_HEIGHT + 0.34, (i / 3 - 0.5) * 1.15)
         die.rotation = Vector3(0, rng.randf_range(-0.5, 0.5), 0)
         dice.append(die)
+        if i >= 6:
+            die.visible = false
+            die.freeze = true
+            die.collision_layer = 0
+            die.collision_mask = 0
     get_viewport().size_changed.connect(resize_camera)
     resize_camera()
     update_results()
+    get_tree().auto_accept_quit = false
+    if not testing and not sandbox_mode:
+        profile.read_save()
+        sound_enabled = profile.data.sound
+        menus.home()
+
+func save_profile() -> void:
+    if not testing and not sandbox_mode and not profile.save():
+        status.text = "Не удалось сохранить профиль."
+
+func checkpoint() -> void:
+    if match_open:
+        profile.data.saved = game.snapshot()
+    save_profile()
+
+func start_match(mode: int, contract_index: int, enemy_index: int, names: Array, badges: Array, training: bool) -> String:
+    var c: Dictionary = Catalog.data.contracts[contract_index]
+    var enemy: Dictionary = Catalog.data.opponents[enemy_index]
+    var ids := badges.duplicate()
+    if mode == 0:
+        ids[1] = "%s-%d" % [enemy.badge, c.tier] if c.tier > 0 else "none"
+    for i in range(2):
+        var b := Catalog.badge(ids[i])
+        if not training and int(b.tier) != int(c.tier):
+            return "Игрок %d: выбери бляху ранга стола или включи тренировку." % (i + 1)
+        if not training and (mode == 1 or i == 0) and ids[i] != "none" and int(profile.data.owned.get(ids[i], 0)) < 1:
+            return "Этой бляхи нет в коллекции. Выбери другую или тренировку."
+    var stake: int = int(c.stake) if mode == 0 and not training else 0
+    if profile.data.gold < stake:
+        return "Недостаточно грошей для ставки."
+    game = GameState.new()
+    game.goal = int(c.goal)
+    game.contract = c.id
+    game.mode = "ai" if mode == 0 else "local"
+    game.opponent = enemy_index
+    game.risk = float(enemy.risk)
+    game.training = training
+    game.stake = stake
+    game.names = [names[0] if not names[0].is_empty() else "Игрок 1", enemy.name if mode == 0 else (names[1] if not names[1].is_empty() else "Игрок 2")]
+    game.configure(ids)
+    profile.data.gold -= stake
+    profile.data.badges = badges.duplicate()
+    match_open = true
+    clear_selection()
+    reset_dice()
+    menus.hide()
+    checkpoint()
+    update_results()
+    return ""
+
+func reset_dice() -> void:
+    needs_retry = false
+    badge_retry.clear()
+    for i in range(dice.size()):
+        var die := dice[i]
+        die.freeze = true
+        die.collision_layer = 1 if i < 6 else 0
+        die.collision_mask = die.collision_layer
+        die.visible = i < 6
+        die.visual.scale = Vector3.ONE
+        die.position = Vector3((i % 3 - 1) * 1.1, BOARD_HEIGHT + 0.34, (i / 3 - 0.5) * 1.15)
+        die.rotation = Vector3.ZERO
+        die.reset_physics_interpolation()
+
+func resume_saved() -> void:
+    var restored: Variant = GameState.restore(profile.data.saved)
+    if restored == null:
+        menus.text("Сохранение партии повреждено; профиль и кошелёк сохранены.")
+        return
+    game = restored
+    ai_wait = 0
+    ai_acting = false
+    match_open = true
+    clear_selection()
+    reset_dice()
+    menus.hide()
+    for item in game.pool:
+        var die := dice[item.die]
+        die.visible = true
+        die.collision_layer = 1
+        die.collision_mask = 1
+        if item.value in [1, 2, 3, 4, 5, 6]:
+            die.basis = Basis(Quaternion(die.NORMALS[int(item.value) - 1], Vector3.UP))
+            die.reset_physics_interpolation()
+    for id in game.held:
+        var die := dice[id]
+        die.basis = Basis(Quaternion(die.NORMALS[int(game.held_faces[str(id)]) - 1], Vector3.UP))
+        die.reset_physics_interpolation()
+    if not game.held.is_empty():
+        await park_held()
+    if game.phase == "rolling":
+        if not game.partial_roll.is_empty():
+            throw_dice(game.partial_roll.duplicate())
+        else:
+            game.phase = "ready"
+            throw_dice()
+    else:
+        update_results()
+
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
+        cancel_tap()
+        checkpoint()
+        if what == NOTIFICATION_WM_CLOSE_REQUEST:
+            get_tree().quit()
+    elif what == NOTIFICATION_WM_GO_BACK_REQUEST and menus != null:
+        if menus.visible:
+            menus.back()
+        elif not throwing and not collecting:
+            menus.pause()
+    elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+        cancel_tap()
+
+func turn_finished() -> void:
+    clear_selection()
+    update_results()
+    checkpoint()
+    if not testing and game.phase != "over" and game.mode == "local":
+        menus.handoff()
+
+func badge_action() -> void:
+    if throwing or collecting or menus.visible:
+        return
+    var action: Dictionary = game.use_badge(selected)
+    if action.is_empty():
+        status.text = game.error
+        return
+    if action.has("partial"):
+        throw_dice(action.partial)
+    elif action.get("roll", false):
+        throw_dice()
+    elif action.has("die"):
+        collecting = true
+        update_results()
+        var die := dice[action.die]
+        die.freeze = true
+        var target := Quaternion(die.NORMALS[int(action.value) - 1], Vector3.UP)
+        var tween := create_tween()
+        tween.tween_property(die, "quaternion", target, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+        await tween.finished
+        collecting = false
+        update_results()
+        checkpoint()
+    else:
+        update_results()
+        checkpoint()
+
+func _process(delta: float) -> void:
+    if testing or sandbox_mode or not match_open or menus.visible or throwing or collecting or game.phase == "over" or game.mode != "ai" or game.active != 1 or ai_acting:
+        ai_wait = 0.0
+        return
+    ai_wait += delta
+    if ai_wait < (0.35 if profile.data.fast else 0.9):
+        return
+    ai_wait = 0
+    ai_acting = true
+    if needs_retry or game.phase == "ready":
+        roll_action()
+    elif game.phase == "bust":
+        if game.can_badge() and game.badge().type == "resurrection":
+            badge_action()
+        else:
+            game.bust()
+            turn_finished()
+    else:
+        var choice: Dictionary = game.ai_choice()
+        if not choice.is_empty():
+            clear_selection()
+            for id in choice.indices:
+                selected.append(int(id))
+                dice[int(id)].set_selected(true)
+            var b: Dictionary = game.badge()
+            if game.can_badge() and ((b.type == "double" and choice.points >= 300 and game.last_multiplier == 1) or (b.type == "warlord" and choice.bank and game.turn_points + choice.points >= 300 and game.multiplier == 1.0)):
+                badge_action()
+                choice = game.ai_choice()
+            elif game.can_badge() and b.type == "fortune" and game.pool.size() >= 3 and choice.points <= 150:
+                clear_selection()
+                for i in range(game.pool.size()):
+                    if not (choice.mask & (1 << i)) and selected.size() < int(b.tier):
+                        selected.append(game.pool[i].die)
+                if not selected.is_empty():
+                    badge_action()
+                    ai_acting = false
+                    return
+            clear_selection()
+            for id in choice.indices:
+                selected.append(int(id))
+                dice[int(id)].set_selected(true)
+            update_results()
+            status.text = "%s выбирает +%d и %s." % [game.names[1], choice.points * game.last_multiplier, "забирает очки" if choice.bank else "рискует ещё раз"]
+            await get_tree().create_timer(0.3 if profile.data.fast else 0.8).timeout
+            if menus.visible:
+                ai_acting = false
+                clear_selection()
+                update_results()
+                return
+            if game.phase != "over":
+                if choice.bank:
+                    bank_action()
+                else:
+                    roll_action()
+    ai_acting = false
 
 func wood(color := Color(0.13, 0.085, 0.052)) -> ShaderMaterial:
     var material := ShaderMaterial.new()
@@ -280,9 +554,23 @@ func build_ui() -> void:
     header.add_theme_constant_override("separation", 5)
     title_label = label("КОСТИ У ТРАКТА", 25, Color(0.87, 0.74, 0.48))
     header.add_child(title_label)
-    score_label = label("", 20, Color(0.93, 0.83, 0.64))
-    header.add_child(score_label)
-    player_label = label("", 16, Color(0.27, 0.76, 0.87))
+    var score_row := HBoxContainer.new()
+    score_row.add_theme_constant_override("separation", 12)
+    header.add_child(score_row)
+    for i in range(2):
+        var card := PanelContainer.new()
+        card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        score_row.add_child(card)
+        cards.append(card)
+        var caption := label("", 20, Color(0.93, 0.83, 0.64))
+        caption.clip_text = true
+        caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+        card.add_child(caption)
+        card_labels.append(caption)
+    score_label = card_labels[0]
+    player_label = label("", 18, Color(0.27, 0.76, 0.87))
+    player_label.clip_text = true
     header.add_child(player_label)
     var bottom := VBoxContainer.new()
     bottom_ui = bottom
@@ -327,7 +615,40 @@ func build_ui() -> void:
         if not sound_enabled:
             for player in impact_players:
                 player.stop()
+        profile.data.sound = sound_enabled
+        save_profile()
     )
+    # A compact top-right menu keeps the action row exclusively about this turn.
+    menu_button = Button.new()
+    menu_button.text = "≡"
+    style_button(menu_button)
+    menu_button.custom_minimum_size = Vector2(68, 68)
+    root.add_child(menu_button)
+    menu_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+    menu_button.offset_left = -92
+    menu_button.offset_right = -24
+    menu_button.offset_top = 18
+    menu_button.offset_bottom = 86
+    menu_button.pressed.connect(func():
+        if not throwing and not collecting:
+            menus.pause()
+    )
+    badge_button = Button.new()
+    style_button(badge_button)
+    badge_button.add_theme_font_size_override("font_size", 16)
+    root.add_child(badge_button)
+    badge_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    badge_button.offset_left = 24
+    badge_button.offset_right = -24
+    badge_button.offset_top = 150
+    badge_button.offset_bottom = 218
+    badge_button.pressed.connect(menus_badge)
+    menus = Menus.new()
+    menus.table = self
+    root.add_child(menus)
+
+func menus_badge() -> void:
+    menus.badge_details()
 
 func resize_camera() -> void:
     var window := get_window()
@@ -340,9 +661,16 @@ func resize_camera() -> void:
     camera.fov = 50
     camera.look_at(Vector3(0, 0, 0.8 if landscape else 0.0))
     title_label.visible = not landscape
+    header_ui.offset_right = -108
     header_ui.offset_top = 12 if landscape else 24
     bottom_ui.offset_top = -145 if landscape else -170
     bottom_ui.offset_bottom = -20 if landscape else -28
+    badge_button.offset_top = 90 if landscape else 155
+    badge_button.offset_bottom = badge_button.offset_top + 68
+    badge_button.offset_right = -get_viewport().get_visible_rect().size.x * 0.55 if landscape else -24
+    menu_button.offset_top = 12 if landscape else 18
+    menu_button.offset_bottom = menu_button.offset_top + 68
+    cancel_tap()
     # Portrait sees the same whole tray, including very narrow phones.
     if aspect < 0.56:
         camera.fov = rad_to_deg(2 * atan(tan(deg_to_rad(25.0)) * 0.56 / aspect))
@@ -353,10 +681,15 @@ func roll_action() -> void:
     if needs_retry:
         # Preserve the held dice and pending turn points; no ambiguous face
         # from a cocked/moving body has been submitted to the rule engine.
-        game.phase = "ready"
         needs_retry = false
+        if not badge_retry.is_empty():
+            throw_dice(badge_retry)
+            return
+        game.phase = "ready"
     if game.phase == "bust":
         game.bust()
+        turn_finished()
+        return
     if game.phase == "select":
         if not game.keep(selected):
             status.text = game.error
@@ -376,8 +709,7 @@ func bank_action() -> void:
     if not game.bank(selected):
         status.text = game.error
         return
-    clear_selection()
-    update_results()
+    turn_finished()
 
 func clear_selection() -> void:
     selected.clear()
@@ -396,37 +728,68 @@ func park_held() -> void:
         die.collision_mask = 0
         die.linear_velocity = Vector3.ZERO
         die.angular_velocity = Vector3.ZERO
-        tween.tween_property(die, "position", Vector3(-1.75 + i * 0.7, BOARD_HEIGHT + 0.33 * 0.65, 2.67), 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+        die.visible = true
+        var spacing := minf(0.7, 3.7 / maxf(1, game.held.size() - 1))
+        tween.tween_property(die, "position", Vector3(-1.75 + i * spacing, BOARD_HEIGHT + 0.33 * 0.65, 2.67), 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
         tween.tween_property(die.visual, "scale", Vector3.ONE * 0.65, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
     await tween.finished
     collecting = false
 
 func _unhandled_input(event: InputEvent) -> void:
-    # Godot emulates this mouse event from touch as well: do not handle both.
-    if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-        pick_die(event.position)
+    if event is InputEventMouseButton and event.device == InputEvent.DEVICE_ID_EMULATION:
+        return # GUI buttons still receive emulated mouse events normally.
+    if not table_interactive():
+        cancel_tap()
+        return
+    var pointer := -2
+    var down := false
+    var up := false
+    var at := Vector2.ZERO
+    if event is InputEventScreenTouch:
+        pointer = event.index
+        down = event.pressed
+        up = not event.pressed
+        at = event.position
+        if event.canceled:
+            cancel_tap()
+            return
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        pointer = -1
+        down = event.pressed
+        up = not event.pressed
+        at = event.position
+    elif event is InputEventScreenDrag or event is InputEventMouseMotion:
+        at = event.position
+        var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
+        if tap_pointer != -2 and ((at - tap_origin) * ratio).length() > 12:
+            tap_cancelled = true
+        return
+    else:
+        return
+    if down:
+        if over_interface(at):
+            cancel_tap()
+            return
+        if tap_pointer != -2:
+            tap_cancelled = true # Never toggle on a multi-finger gesture.
+            return
+        tap_pointer = pointer
+        tap_origin = at
+        tap_candidate = die_at(at)
+        tap_cancelled = false
+    elif up and pointer == tap_pointer:
+        var ratio := Vector2(get_window().size) / get_viewport().get_visible_rect().size
+        if not tap_cancelled and ((at - tap_origin) * ratio).length() <= 12 and die_at(at) == tap_candidate:
+            toggle_die(tap_candidate)
+        cancel_tap()
 
 func pick_die(at: Vector2) -> void:
-    if throwing or collecting or game.phase != "select":
+    if not table_interactive():
         return
-    var ray := PhysicsRayQueryParameters3D.create(camera.project_ray_origin(at),
-        camera.project_ray_origin(at) + camera.project_ray_normal(at) * 40, 1)
-    var hit := get_world_3d().direct_space_state.intersect_ray(ray)
-    var index := -1
-    if not hit.is_empty() and hit.collider is RigidBody3D:
-        index = dice.find(hit.collider)
-    if index < 0:
-        # Padded hit target for small physical dice on a narrow phone.
-        var nearest := 30.0 * get_viewport().get_visible_rect().size.y / get_window().size.y
-        for item in game.pool:
-            var distance: float = camera.unproject_position(dice[item.die].global_position).distance_to(at)
-            if distance < nearest:
-                nearest = distance
-                index = item.die
-    toggle_die(index)
+    toggle_die(die_at(at))
 
 func toggle_die(index: int) -> void:
-    if throwing or collecting or game.phase != "select":
+    if throwing or collecting or game.phase not in ["select", "bust"]:
         return
     var selectable := false
     for item in game.pool:
@@ -439,19 +802,26 @@ func toggle_die(index: int) -> void:
     else:
         selected.append(index)
     dice[index].set_selected(selected.has(index))
+    if profile.data.haptic and OS.get_name() == "Android":
+        Input.vibrate_handheld(12)
     update_results()
 
-func throw_dice() -> void:
+func throw_dice(partial: Array = []) -> void:
     if throwing or collecting:
         return
     if sandbox_mode:
         rolling_dice.assign([0, 1, 2, 3, 4, 5])
+    elif not partial.is_empty():
+        rolling_dice.assign(partial)
+        badge_retry.assign(partial)
     else:
+        badge_retry.clear()
         rolling_dice = game.begin_roll()
         if rolling_dice.is_empty():
             status.text = game.error
             return
     clear_selection()
+    cancel_tap()
     throwing = true
     elapsed = 0
     quiet_time = 0
@@ -464,15 +834,30 @@ func throw_dice() -> void:
     preparation_time = 0.0
     pickup_duration = PICKUP_DURATION
     launch_poses.clear()
+    for item in game.pool:
+        if not rolling_dice.has(item.die):
+            # Badge rerolls must not turn an already-observed unchosen face
+            # into a different physical result through a later collision.
+            var stationary := dice[item.die]
+            stationary.freeze = true
+            stationary.linear_velocity = Vector3.ZERO
+            stationary.angular_velocity = Vector3.ZERO
+    for i in range(dice.size()):
+        if not game.held.has(i) and not rolling_dice.has(i) and not game.pool.any(func(d: Dictionary): return d.die == i):
+            dice[i].visible = false
+            dice[i].freeze = true
+            dice[i].collision_layer = 0
+            dice[i].collision_mask = 0
     for i in range(rolling_dice.size()):
         var die := dice[rolling_dice[i]]
+        die.visible = true
         # Preserve the visible pose. Pickup is animated, never a teleport.
         # Camera/player is at +Z. A strong -Z impulse throws AWAY from them.
         var velocity := Vector3(rng.randf_range(-1.35, 1.35), rng.randf_range(0.6, 1.3), rng.randf_range(-6.8, -5.4))
         var spin := Vector3(rng.randf_range(-22, -14), rng.randf_range(-14, 14), rng.randf_range(-17, 17))
         # Keep the initial three-column formation through pickup so paths
         # don't cross merely because the launch layout has a different shape.
-        var release := Vector3(-1.0 + (i % 3), 1.25 + (i / 3) * 0.15, 1.15 + (i / 3))
+        var release := Vector3(-1.0 + (i % 3), 1.25 + (i / 3) * 0.15, minf(2.4, 1.15 + (i / 3)))
         launch_poses.append({
             "start": die.position,
             "rotation": die.quaternion,
@@ -566,18 +951,45 @@ func _physics_process(delta: float) -> void:
             for index in rolling_dice:
                 values.append(dice[index].top_face())
             game.finish_roll(values)
+            for item in game.pool:
+                dice[item.die].freeze = true
+            badge_retry.clear()
+            checkpoint()
         update_results()
 
 func update_results() -> void:
-    score_label.text = "%s: %d  ·  %s: %d" % [game.names[0], game.scores[0], game.names[1], game.scores[1]]
-    player_label.text = "%s · ход %d · цель %d" % [game.names[game.active], game.turn, game.goal]
+    for i in range(2):
+        card_labels[i].text = "%s%s\n%d / %d" % ["▶ " if game.active == i and game.phase != "over" else "", game.names[i], game.scores[i], game.goal]
+        var style := StyleBoxFlat.new()
+        style.bg_color = Color(0.04, 0.10, 0.13, 0.88) if i == 0 else Color(0.16, 0.055, 0.035, 0.88)
+        style.border_color = Color(0.27, 0.76, 0.87) if i == 0 else Color(0.87, 0.39, 0.29)
+        style.set_border_width_all(2 if game.active == i else 1)
+        style.content_margin_top = 5
+        style.content_margin_bottom = 5
+        cards[i].add_theme_stylebox_override("panel", style)
+    player_label.text = "%s · ход %d" % ["ВАШ ХОД" if game.mode == "ai" and game.active == 0 else "ХОД: " + game.names[game.active].to_upper(), game.turn]
     player_label.add_theme_color_override("font_color", Color(0.27, 0.76, 0.87) if game.active == 0 else Color(0.87, 0.39, 0.29))
     var score: Variant = game.selection(selected)
-    result_label.text = "Выбрано: %d  ·  Ход: %d" % [0 if score == null else int(score.points), game.turn_points]
+    var points := 0 if score == null else int(score.points)
+    result_label.text = "Под риском: %d  ·  Выбрано: +%d" % [game.total(), points * game.last_multiplier]
+    result_label.add_theme_font_size_override("font_size", 20)
     var busy := throwing or collecting
     roll_button.disabled = busy or game.phase == "over" or (game.phase == "select" and score == null)
     bank_button.disabled = busy or (game.phase != "over" and score == null and not (game.phase == "ready" and game.turn_points > 0))
-    bank_button.text = "Новая партия" if game.phase == "over" else "Сохранить"
+    bank_button.text = "Новая партия" if game.phase == "over" else "Забрать %d" % game.total(points)
+    menu_button.disabled = busy or ai_acting
+    sound_button.text = "Звук: да" if sound_enabled else "Звук: нет"
+    var b: Dictionary = game.badge()
+    badge_button.text = "%s · %s" % [b.name, "автоматически" if Catalog.passive(b) else "осталось %d" % maxi(0, int(b.uses) - int(game.uses[game.active]))]
+    badge_button.tooltip_text = b.desc
+    if game.disabled[game.active]:
+        badge_button.text = "Бляха отключена защитой соперника"
+    badge_button.visible = game.badges[game.active] != "none"
+    badge_button.disabled = busy
+    if game.mode == "ai" and game.active == 1:
+        roll_button.disabled = true
+        bank_button.disabled = true
+        badge_button.disabled = true
     if needs_retry and not busy:
         roll_button.disabled = false
         roll_button.text = "Повторить"
@@ -589,17 +1001,30 @@ func update_results() -> void:
     match game.phase:
         "ready":
             roll_button.text = "Бросить"
-            status.text = "Все кости зачтены — бросай шесть снова." if game.turn_points > 0 else "Брось кости. Затем выбери очковые."
+            status.text = "Все кости зачтены — полный набор снова. Очки хода под риском." if game.turn_points > 0 else "Брось кости. Очки на карточках уже сохранены."
         "select":
-            roll_button.text = "Переброс"
+            var left: int = game.pool.size() - selected.size()
+            roll_button.text = "Зачесть\nБросить %d" % (left if left > 0 else 6 + game.extra)
             status.text = "Выбери очковые кости на доске." if selected.is_empty() else ("Выбранные кости не дают очков." if score == null else " + ".join(score.parts))
         "bust":
             roll_button.text = "Далее"
             result_label.text = "Сгорело: %d" % game.turn_points
             status.text = "Пусто! Следующий ход — %s." % game.names[1 - game.active]
+            if game.can_badge():
+                status.text = "Пусто! Можно применить бляху или передать ход."
         "over":
             status.text = "Победил %s!" % game.names[game.winner]
+            if not testing and not sandbox_mode and not game.settled:
+                var message: String = profile.settle(game)
+                checkpoint()
+                menus.result(message)
 
 func _unhandled_key_input(event: InputEvent) -> void:
-    if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
-        roll_action()
+    if event is InputEventKey and event.pressed and not event.echo:
+        if event.keycode == KEY_ESCAPE:
+            if menus.visible:
+                menus.back()
+            elif not throwing and not collecting:
+                menus.pause()
+        elif event.keycode == KEY_SPACE and not menus.visible and not (game.mode == "ai" and game.active == 1):
+            roll_action()

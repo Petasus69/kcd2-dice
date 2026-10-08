@@ -2,6 +2,7 @@
 // handwritten copy of its scoring rules. Run before the native parity test.
 import {writeFileSync} from 'node:fs';
 import {scoreDice, Game, aiChoice} from '../../web/engine.js';
+import {BADGES, badgeById} from '../../web/data.js';
 const output = process.argv[2];
 if (!output) throw new Error('Pass an output JSON path');
 const scores = [];
@@ -12,11 +13,13 @@ function visit(values, first) {
 }
 visit([], 0);
 const players = () => ['Игрок 1','Игрок 2'].map(name => ({name, dice:Array(6).fill('ordinary'), badge:'none'}));
-const dieId = d => Number(d.uid.split('-').at(-1));
+const dieId = d => d.uid.startsWith('extra-')?5+Number(d.uid.split('-').at(-1)):Number(d.uid.split('-').at(-1));
 function state(g) {
   return {scores:g.players.map(p=>p.score), active:g.active, turn:g.turn,
     phase:g.phase, pool:g.pool.map(d=>({die:dieId(d), value:d.value})),
-    held:g.held.map(dieId), turn_points:g.turnPoints, winner:g.winner??-1};
+    held:g.held.map(dieId), turn_points:g.turnPoints, winner:g.winner??-1,
+    uses:g.players.map(p=>p.uses),disabled:g.players.map(p=>p.disabled),multiplier:g.multiplier,last_multiplier:g.lastMultiplier,extra:g.extra,
+    choices: g.phase==='select'?[.7,1,1.1,1.25].map(risk=>({risk,...aiChoice(g,risk)})):[]};
 }
 function apply(g, action) {
   const positions = () => action.indices.map(id=>g.pool.findIndex(d=>dieId(d)===id));
@@ -28,6 +31,12 @@ function apply(g, action) {
     case 'keep':g.keep(positions());break;
     case 'bank':g.bank(positions());break;
     case 'bust':g.bust();break;
+    case 'badge': {
+      let index=0;g.rng=()=>(action.values[index++]-0.5)/6;
+      g.useBadge(positions());
+      if(index!==action.values.length)throw new Error('Badge fixture roll mismatch');
+      break;
+    }
     default:throw new Error('Unknown action');
   }
   return {...action, expected:state(g)};
@@ -67,5 +76,24 @@ for(let run=0;run<30;run++) {
   if(g.phase!=='over') throw new Error('Oracle game stalled');
   scenarios.push({name:`complete ordinary match ${run+1}`,goal:1500,steps});
 }
-writeFileSync(output,JSON.stringify({scores,scenarios}));
+const badgeScores=[];
+for(const b of BADGES.filter(b=>b.type!=='jester')) {
+  for(const item of scores.filter(s=>s.values.every(v=>v>=1&&v<=6)))
+    badgeScores.push({...item,badge:b.id,points:scoreDice(item.values,b)?.points??null});
+  const playersWithBadges=players();playersWithBadges[0].badge=b.id;
+  if(b.type==='defence')playersWithBadges[1].badge=`headstart-${b.tier}`;
+  const g=new Game({goal:5000,players:playersWithBadges,mode:'local'}),steps=[];
+  steps.push(apply(g,{type:'roll',values:b.type==='resurrection'?[2,3,4,6,2,3]:[1,1,2,3,4,6]}));
+  if(!['formation','emperor','tyche','headstart','defence','none'].includes(b.type)) {
+    const indices=['fortune','transmutation','double'].includes(b.type)?[0]:b.type==='swap'?(b.tier===3?[0,1]:[0]):[];
+    const values=b.type==='resurrection'?[1,5,2,3,4,6]:['fortune','swap','might'].includes(b.type)?Array(b.type==='swap'&&b.tier===3?2:1).fill(5):[];
+    steps.push(apply(g,{type:'badge',indices,values}));
+  }
+  if(g.phase==='select') {
+    const choice=aiChoice(g,1);
+    steps.push(apply(g,{type:'bank',indices:g.pool.filter((_,i)=>choice.mask&(1<<i)).map(dieId)}));
+  }
+  scenarios.push({name:`badge ${b.id}`,goal:5000,badges:playersWithBadges.map(p=>p.badge),steps});
+}
+writeFileSync(output,JSON.stringify({scores,badgeScores,scenarios}));
 console.log(`Generated ${scores.length} scoring cases and ${scenarios.length} match scenarios from web/engine.js`);

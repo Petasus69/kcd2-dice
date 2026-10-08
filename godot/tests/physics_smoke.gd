@@ -14,10 +14,11 @@ func require(condition: bool, message: String) -> void:
 
 func run() -> void:
     scene = load("res://table.tscn").instantiate()
-    root.add_child(scene)
+    scene.testing = true
     scene.sandbox_mode = true
+    root.add_child(scene)
     await process_frame
-    require(scene.dice.size() == 6, "Expected six actual rigid bodies")
+    require(scene.dice.size() == 9 and scene.dice.slice(6).all(func(d: RigidBody3D): return not d.visible and d.collision_layer == 0), "Expected six active bodies and three isolated badge reserves")
     # Check the mapping independently of throw outcomes.
     for face in range(6):
         var die = scene.dice[0]
@@ -28,7 +29,7 @@ func run() -> void:
     scene.rng.seed = 91425
     for attempt in range(12):
         var previous: Array[Vector3] = []
-        for die in scene.dice:
+        for die in scene.dice.slice(0, 6):
             previous.append(die.position)
         scene.throw_dice()
         for pose in scene.launch_poses:
@@ -50,7 +51,7 @@ func run() -> void:
                 previous[i] = die.position
         require(not scene.throwing, "Throw did not finish")
         require(not scene.roll_button.disabled, "Throw button stayed disabled")
-        for die in scene.dice:
+        for die in scene.dice.slice(0, 6):
             require(abs(die.position.x) < 2.72 and abs(die.position.z) < 3.22,
                 "Die escaped the tray")
             require(die.position.y > 0.25 and die.position.y < 1.1, "Die fell through table or remained airborne")
