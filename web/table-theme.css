@@ -1,0 +1,48 @@
+/* Mobile adaptation of the table and inventory shown in the supplied KCD2 guide. */
+:root{--ink:#30281a;--gilt:#d6bd72;--blue:#52c3ee;--red:#e96550;--paper:#d7c99b}
+body{color:#eadbaa}
+.button{border-radius:0;min-height:48px;border-color:#aa8a47;background:linear-gradient(#392c1e,#211b13);box-shadow:inset 0 0 0 2px #18120d,inset 0 0 0 3px #8f74334d;font-size:14px}
+.button.gold{background:linear-gradient(#dbc689,#b69b57);color:#322719;border-color:#ecd8a0;box-shadow:inset 0 0 0 2px #6b5428,inset 0 0 0 3px #e9d496}
+.icon-button,.close{border-radius:2px;background:#17150f88;border-color:#bda36966;min-width:44px;min-height:44px}
+.home .title-block{border-top:1px solid #c4a96070;border-bottom:1px solid #c4a96070;padding:18px 0;max-width:420px;align-self:center;width:100%}
+.home .title-block h1{font-size:clamp(58px,16vw,90px);letter-spacing:1px}
+.home .ornament{font-size:25px}.home .subtitle{letter-spacing:5px}.home .motto{font-size:13px}
+.home-foot{font-size:12px}.footnote{font-size:10px;line-height:1.5}
+body[data-screen=game] .scene{background-position:center bottom;transform:scale(1.55);transform-origin:center bottom;filter:brightness(.72) saturate(.65)}
+body[data-screen=game] .vignette{background:radial-gradient(ellipse at 52% 38%,transparent 20%,#0b0a0866 100%),linear-gradient(#11130d55,transparent 25%,transparent 60%,#0b0908b8)}
+body[data-screen=game] #app{max-width:1200px}
+.play{position:relative;padding: max(10px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr;grid-template-rows:48px 66px minmax(160px,1fr) auto;gap:0}
+.game-top{grid-row:1;grid-column:1;z-index:3;align-items:center}
+.game-top .smallcaps{font-size:10px;letter-spacing:1.2px}.goal{font-size:11px;margin-top:2px}.goal b{font-size:16px}
+.turn-heading{grid-row:2;grid-column:1;padding:10px 0 0;min-height:0;z-index:3;pointer-events:none}
+.turn-heading h2{font-size:20px;margin:1px 0 4px;color:#e9d99e;font-weight:400}.turn-heading .smallcaps{font-size:10px;letter-spacing:1px}.turn-heading p{font-size:12px;line-height:1.4;max-width:340px;margin:auto;color:#d6c9ae}
+.table-area{grid-row:3;grid-column:1;min-height:160px;overflow:visible;z-index:1}
+.table-rim{position:absolute;bottom:53px;left:8%;right:8%;border-bottom:1px solid #b59b5a44;pointer-events:none}
+.held-label{bottom:4px;font-size:10px;color:#bcae8c;letter-spacing:1px}
+.scoreboard{grid-row:4;grid-column:1;align-self:start;width:calc(100% - 60px);margin:0;gap:0;z-index:3;pointer-events:none;border-top:1px solid #bea56870;border-bottom:1px solid #bea56840}
+.score-card,.score-card.active{background:none;border:0;text-align:left;padding:9px 10px 7px;min-width:0}
+.score-card+.score-card{border-left:1px solid #a7905860}
+.player-name,.score-card.active .player-name{color:#e3cd82;font-size:12px}.score-number{font-size:27px;margin:2px 0;line-height:1.2;color:var(--blue);text-shadow:1px 2px 2px #000}
+#score-1 .score-number{color:var(--red)}
+.score-card.active .player-name:before{content:'› ';color:#e3cd82}.score-track{display:none}.player-badge{font-size:10px;min-height:13px;color:#c4b594;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.versus{display:none}
+.game-bottom{grid-row:4;grid-column:1;padding-top:94px;z-index:2}
+.turn-summary{background:none;border:0;justify-content:flex-start;gap:20px;padding:0 4px 4px}
+.turn-summary>div{min-width:72px;text-align:left}.turn-summary .smallcaps{font-size:10px;letter-spacing:.5px;color:#c9bb96}.turn-summary strong{font-size:23px;color:#eee1bb;margin-top:1px}.summary-divider{height:28px;background:#a78b5044}
+.badge-button{position:absolute;right:0;top:12px;width:48px;height:48px;background:radial-gradient(ellipse at 35% 20%,#c2ab66,#74602f 55%,#3d321b);border-color:#c3aa69;box-shadow:inset 0 0 0 3px #44351c,inset 0 0 0 4px #a58d4d,0 3px 5px #0008}
+.combo-line{height:28px;font-size:12px;padding:5px 0;text-align:left;color:#e2cb7b}
+.action-row{gap:10px;flex-direction:row}.action-row>.button{min-height:52px;font-size:13px;line-height:1.3;padding:9px}
+.table-footer{font-size:11px;padding-top:7px;gap:8px}.table-footer button{font-size:12px;min-height:36px;padding:6px 3px;color:#e2d2ac}
+body[data-screen=game] .toast{bottom:auto;top:max(62px,calc(env(safe-area-inset-top) + 56px));pointer-events:none}
+.modal-shade{background:#090a09ba;backdrop-filter:blur(3px)}
+.parchment{border-radius:0;padding:18px;background:repeating-linear-gradient(0deg,#4b402505 0px,#4b402505 1px,transparent 1px,transparent 4px),radial-gradient(ellipse at 30% 10%,#eee0b5,#d2c294 65%,#b49e69);border:3px solid #927744;outline:1px solid #d9c47e;box-shadow:0 20px 70px #000b,inset 0 0 0 2px #e2cf92,inset 0 0 0 5px #8a6c3450;color:var(--ink)}
+.parchment>header{border-bottom:2px solid #977d44;padding-bottom:12px}.parchment h2{color:#392c1c;font-size:26px}.parchment .smallcaps{color:#685330;letter-spacing:1.5px}.parchment .close{color:#f3dfae;background:#6f2921;border-color:#9f7944}
+.modal-body{padding-top:14px;scrollbar-color:#977642 #dac99e}.modal-body p,.journal-entry{color:#4b402b;font-size:13px}.modal-body h3{color:#6e311f}.muted{color:#6b5a3b!important;font-size:12px!important}
+.segmented{border:1px solid #866939;border-radius:0}.segmented button{background:#c4b17e;color:#514124;font-size:13px;min-height:46px}.segmented button.active{background:linear-gradient(#813a2a,#5d251e);color:#f2dfb0}
+label>span{font-size:12px;color:#594728}select,input[type=text]{background:#ede1bb;color:#3f3420;border-color:#947947;border-radius:0;font-size:13px;min-height:46px;color-scheme:light}
+.contract-preview{background:#b8a27344;border-color:#94743b66;color:#4b3822;font-size:13px}.selection-help{background:#b2985550;color:#4c3a20;font-size:12px}.tabs{gap:0}.tabs button{color:#675334;font-size:13px;min-height:44px}.tabs button.active{color:#f4e1b3;background:#6f2c22;border-color:#b99956}
+.catalog{gap:0;border:1px solid #9d8148}.item-card{background:#eadbb333;color:#3c3222;border:0;border-bottom:1px solid #94773d50;border-radius:0;padding:10px;gap:12px;min-height:72px}.item-card:nth-child(even){background:#ac935321}.item-card.active{background:linear-gradient(90deg,#c4a14b88,#e6ce84aa);box-shadow:inset 3px 0 #764022}
+.item-copy strong{color:#3b3020;font-size:13px}.item-copy small{color:#675537;font-size:11px}.odds{color:#746143;font-size:10px;gap:8px}.odds b{color:#422f1d}
+.item-icon{width:48px;height:48px;background:none!important;border:0;box-shadow:none;border-radius:0}.item-icon img{width:100%;height:100%;object-fit:contain}.slot{border-radius:0;background:#bca56f;color:#4d3820;border-color:#8a6c36;min-height:52px}.slot.active{background:#dec77f;border-color:#74372a;box-shadow:inset 0 0 0 1px #74372a}.slot img{display:block;width:100%;height:38px;object-fit:contain}.slot small{font-size:10px;margin:0}
+.rules-table{font-size:13px}.rules-table td{color:#493b25;border-color:#94783c55}.rules-table td:last-child{color:#7b3523}.rule-step b{border-color:#8b6b36;color:#703125}.result-scores{color:#713b24}.subtle-button{color:#78382a;font-size:12px;min-height:44px}.toast{border-radius:0;font-size:13px;border-color:#cab16c}
+@media(max-height:700px) and (orientation:portrait){.play{grid-template-rows:44px 54px minmax(120px,1fr) auto;padding-left:12px;padding-right:12px}.turn-heading{padding-top:3px}.turn-heading h2{font-size:18px}.turn-heading p{font-size:11px}.table-area{min-height:120px}.score-card{padding-top:6px;padding-bottom:5px}.score-number{font-size:24px}.game-bottom{padding-top:84px}.combo-line{height:24px}.action-row>.button{min-height:48px}.table-footer button{min-height:30px}}
+@media(min-width:650px) and (orientation:landscape){.play{grid-template-columns:minmax(0,1fr) 270px;grid-template-rows:44px 1fr auto;gap:0 20px;padding:10px 24px}.game-top{grid-column:1/-1;grid-row:1}.turn-heading{grid-column:1;grid-row:2;align-self:start;padding-top:4px}.turn-heading h2{font-size:18px}.turn-heading p{font-size:11px}.table-area{grid-column:1;grid-row:2;align-self:stretch;margin-top:86px;min-height:90px}.scoreboard{grid-column:1;grid-row:3;width:100%;max-width:360px;align-self:end}.game-bottom{grid-column:2;grid-row:2/4;align-self:end;padding-top:65px}.turn-summary{gap:14px}.badge-button{top:4px}.action-row{flex-direction:column}.table-footer{flex-wrap:wrap}.parchment{max-height:94dvh}.table-rim{bottom:45px}.home .title-block{padding:8px 0}.home .title-block h1{font-size:56px}}

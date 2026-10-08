@@ -1,6 +1,6 @@
 import {DICE,BADGES,CONTRACTS,OPPONENTS,TIER_NAMES,dieById,badgeById} from './data.js';
 import {Game,aiChoice,scoringOptions} from './engine.js';
-import {DiceRenderer} from './renderer.js';
+import {DiceRenderer,diePortrait} from './renderer.js';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Math.floor(n).toLocaleString('ru-RU');
@@ -26,8 +26,8 @@ const renderer=new DiceRenderer($('dice-canvas'),i=>{
 const homeRenderer=new DiceRenderer($('home-dice'));
 homeRenderer.set([{id:'ordinary',value:5},{id:'weighted',value:1},{id:'lucky',value:3}]);
 function isAI(){return game?.mode==='ai'&&game.active===1;}
-function showHome(){screen='home';$('home').hidden=false;$('play').hidden=true;$('continue').hidden=!profile.saved||profile.saved.state.phase==='over';$('purse').textContent=`◉ ${fmt(profile.gold)} грошей`;$('stats').textContent=`${profile.wins} побед · ${profile.games} партий`;homeRenderer.resize();}
-function showGame(){screen='game';$('home').hidden=true;$('play').hidden=false;renderer.resize();update();}
+function showHome(){screen='home';document.body.dataset.screen='home';$('home').hidden=false;$('play').hidden=true;$('continue').hidden=!profile.saved||profile.saved.state.phase==='over';$('purse').textContent=`◉ ${fmt(profile.gold)} грошей`;$('stats').textContent=`${profile.wins} побед · ${profile.games} партий`;homeRenderer.resize();}
+function showGame(){screen='game';document.body.dataset.screen='game';$('home').hidden=true;$('play').hidden=false;renderer.resize();update();}
 function openModal(title,html,{closable=true,kicker='У ТРАКТА',onClose=null}={}){
  $('modal-title').textContent=title;$('modal-kicker').textContent=kicker;$('modal-body').innerHTML=html;$('modal').hidden=false;$('close-modal').hidden=!closable;modalClosable=closable;modalCallback=onClose;
  setTimeout(()=>$('modal-body').querySelector('button,select,input')?.focus({preventScroll:true}),30);
@@ -58,7 +58,7 @@ function inventory(){
  $('owner-0').onclick=()=>{inventoryOwner=0;inventory();};$('owner-1').onclick=()=>{inventoryOwner=1;inventory();};$('tab-dice').onclick=()=>{inventoryTab='dice';inventory();};$('tab-badges').onclick=()=>{inventoryTab='badges';inventory();};
  if(inventoryTab==='dice'){
   $('inventory-content').innerHTML=`<p class="muted">Выберите место в наборе, затем кость. Можно брать несколько одинаковых.</p><div class="equipment-slots">${profile.loadouts[inventoryOwner].map((id,i)=>`<button class="slot ${i===inventorySlot?'active':''}" data-slot="${i}" title="${esc(dieById(id).name)}">⚄<small>${i+1}</small></button>`).join('')}</div><p class="selection-help">Место ${inventorySlot+1}: <b>${esc(dieById(profile.loadouts[inventoryOwner][inventorySlot]).name)}</b></p><div class="catalog">${DICE.map(d=>{const sum=d.weights.reduce((a,b)=>a+b);return `<button class="item-card ${profile.loadouts[inventoryOwner][inventorySlot]===d.id?'active':''}" data-die="${d.id}"><span class="item-icon ${d.material}">${d.special==='wild'?'♆':d.special==='choose'?'♧':'⚄'}</span><span class="item-copy"><strong>${d.name}</strong><span class="odds">${d.weights.map((w,i)=>`<span><b>${i+1}</b> ${(100*w/sum).toFixed(1)}%</span>`).join('')}</span>${d.special?`<small>${d.special==='wild'?'Вместо 1 — джокер для комбинаций.':'При выпадении шута выберите число.'}</small>`:''}</span></button>`;}).join('')}</div>`;
-  document.querySelectorAll('[data-slot]').forEach(b=>b.onclick=()=>{inventorySlot=+b.dataset.slot;inventory();});document.querySelectorAll('[data-die]').forEach(b=>b.onclick=()=>{profile.loadouts[inventoryOwner][inventorySlot]=b.dataset.die;save();inventory();});
+  document.querySelectorAll('[data-slot]').forEach(b=>{const id=profile.loadouts[inventoryOwner][+b.dataset.slot];b.innerHTML=`<img src="${diePortrait(id)}" alt=""><small>${+b.dataset.slot+1}</small>`;b.setAttribute('aria-label',`Место ${+b.dataset.slot+1}: ${dieById(id).name}`);b.onclick=()=>{inventorySlot=+b.dataset.slot;inventory();};});document.querySelectorAll('[data-die]').forEach(b=>{b.querySelector('.item-icon').innerHTML=`<img src="${diePortrait(b.dataset.die)}" alt="">`;b.onclick=()=>{profile.loadouts[inventoryOwner][inventorySlot]=b.dataset.die;save();inventory();};});
  }else{
   $('inventory-content').innerHTML=`<p class="muted">Ранги: олово, серебро, золото. В партии обе бляхи должны быть одного ранга. Некоторые численные эффекты пока требуют сверки с оригиналом.</p><div class="catalog">${BADGES.map(b=>`<button class="item-card ${profile.badges[inventoryOwner]===b.id?'active':''}" data-badge="${b.id}"><span class="item-icon badge">${b.icon}</span><span class="item-copy"><strong>${b.name}</strong><small>${TIER_NAMES[b.tier]} · ${b.id==='none'?'':`В коллекции: ${profile.owned[b.id]||0} · `}${b.desc}</small></span></button>`).join('')}</div>`;
   document.querySelectorAll('[data-badge]').forEach(b=>b.onclick=()=>{profile.badges[inventoryOwner]=b.dataset.badge;save();inventory();});
