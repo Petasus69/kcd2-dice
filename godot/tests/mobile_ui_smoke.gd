@@ -131,6 +131,8 @@ func menu_checks() -> void:
     for y in [0.0, 1.21]:
         var candle_at: Vector2 = scene.camera.unproject_position(scene.candle.global_position + Vector3(0, y, 0))
         check(not scene.badge_button.get_global_rect().has_point(candle_at), "Badge panel obscures the candle")
+    var kept_at: Vector2 = scene.camera.unproject_position(Vector3(-1.75, scene.BOARD_HEIGHT + 0.33 * 0.65, 2.67))
+    check(not scene.badge_button.get_global_rect().has_point(kept_at), "Badge panel obscures parked dice")
     scene.menus.badge_details()
     await process_frame
     check(scene.menus.visible and scene.menus.screen == "badge", "Badge explanation missing")

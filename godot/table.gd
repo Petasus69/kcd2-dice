@@ -637,13 +637,9 @@ func build_ui() -> void:
     badge_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     badge_button.clip_text = true
     style_button(badge_button)
-    badge_button.add_theme_font_size_override("font_size", 16)
-    root.add_child(badge_button)
-    badge_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    badge_button.offset_left = 24
-    badge_button.offset_right = -24
-    badge_button.offset_top = 150
-    badge_button.offset_bottom = 218
+    badge_button.add_theme_font_size_override("font_size", 13)
+    badge_button.custom_minimum_size.x = 84
+    actions.add_child(badge_button)
     badge_button.pressed.connect(menus_badge)
     menus = Menus.new()
     menus.table = self
@@ -663,22 +659,10 @@ func resize_camera() -> void:
     camera.fov = 50
     camera.look_at(Vector3(0, 0, 0.8 if landscape else 0.0))
     title_label.visible = not landscape
-    header_ui.offset_right = -size.x * 0.52 if landscape else -108
+    header_ui.offset_right = -108
     header_ui.offset_top = 12 if landscape else 24
     bottom_ui.offset_top = -145 if landscape else -170
     bottom_ui.offset_bottom = -20 if landscape else -28
-    if landscape:
-        badge_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-        badge_button.offset_left = size.x * 0.55
-        badge_button.offset_right = -108
-        badge_button.offset_top = 12
-        badge_button.offset_bottom = 80
-    else:
-        badge_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-        badge_button.offset_left = 24
-        badge_button.offset_right = -24
-        badge_button.offset_top = -270
-        badge_button.offset_bottom = -202
     menu_button.offset_top = 12 if landscape else 18
     menu_button.offset_bottom = menu_button.offset_top + 68
     cancel_tap()
@@ -991,11 +975,12 @@ func update_results() -> void:
     menu_button.disabled = busy or ai_acting
     sound_button.text = "Звук: да" if sound_enabled else "Звук: нет"
     var b: Dictionary = game.badge()
-    badge_button.text = "%s · %s" % [b.name, "автоматически" if Catalog.passive(b) else "осталось %d" % maxi(0, int(b.uses) - int(game.uses[game.active]))]
-    badge_button.tooltip_text = b.desc
+    badge_button.text = "Бляха\n%s" % ("авто" if Catalog.passive(b) else "%d раз" % maxi(0, int(b.uses) - int(game.uses[game.active])))
+    badge_button.tooltip_text = b.name + "\n" + b.desc
     if game.disabled[game.active]:
-        badge_button.text = "Бляха отключена защитой соперника"
+        badge_button.text = "Бляха\nзащита"
     badge_button.visible = game.badges[game.active] != "none"
+    sound_button.visible = not badge_button.visible
     badge_button.disabled = busy
     if game.mode == "ai" and game.active == 1:
         roll_button.disabled = true
