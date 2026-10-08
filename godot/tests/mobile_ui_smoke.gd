@@ -156,9 +156,11 @@ func run() -> void:
         root.size = size
         await create_timer(0.25).timeout
         var viewport_size := root.get_visible_rect().size
-        for button in [scene.roll_button, scene.bank_button, scene.sound_button]:
+        for button in [scene.roll_button, scene.bank_button, scene.sound_button, scene.badge_button, scene.menu_button]:
+            if not button.visible:
+                continue # Ranked games replace the sound shortcut with a badge.
             var rect: Rect2 = button.get_global_rect()
-            check(rect.position.x >= 0 and rect.end.x <= viewport_size.x, "Button outside horizontal viewport")
+            check(rect.position.x >= 0 and rect.end.x <= viewport_size.x, "Visible button outside horizontal viewport: %s %s / %s" % [button.text, rect, viewport_size])
             check(rect.position.y >= 0 and rect.end.y <= viewport_size.y, "Button outside vertical viewport")
             var height: float = rect.size.y * size.y / viewport_size.y
             check(height >= 44, "Button smaller than a 44px touch target")
