@@ -1,6 +1,8 @@
 build/
 *.keystore
 *.jks
+*.apk
+*.aab
 node_modules/
 .DS_Store
 godot/.godot/

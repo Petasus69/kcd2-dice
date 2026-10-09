@@ -1,8 +1,8 @@
 // Generate oracle data from the unchanged production JS engine, not a second
 // handwritten copy of its scoring rules. Run before the native parity test.
 import {writeFileSync} from 'node:fs';
-import {scoreDice, Game, aiChoice} from '../../web/engine.js';
-import {BADGES, badgeById} from '../../web/data.js';
+import {scoreDice, Game, aiChoice} from '../../legacy/web/engine.js';
+import {BADGES} from '../../legacy/web/data.js';
 const output = process.argv[2];
 if (!output) throw new Error('Pass an output JSON path');
 const scores = [];
@@ -96,4 +96,4 @@ for(const b of BADGES.filter(b=>b.type!=='jester')) {
   scenarios.push({name:`badge ${b.id}`,goal:5000,badges:playersWithBadges.map(p=>p.badge),steps});
 }
 writeFileSync(output,JSON.stringify({scores,badgeScores,scenarios}));
-console.log(`Generated ${scores.length} scoring cases and ${scenarios.length} match scenarios from web/engine.js`);
+console.log(`Generated ${scores.length} scoring cases and ${scenarios.length} match scenarios from legacy/web/engine.js`);

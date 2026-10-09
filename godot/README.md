@@ -1,7 +1,9 @@
-# Native Godot prototype · 0.3.0
+# Кости у тракта · Godot 0.3.1
 
-Separate Godot 4.6.3 **Compatibility** project on `prototype/godot-dice-table`.
-The web game and `main` remain unchanged.
+This is the main Godot 4.6.3 **Compatibility** project, developed on `main`.
+Open `project.godot` in Godot and press F5. The previous web game is archived in
+[`../legacy/`](../legacy/). See the [main README](../README.md) and
+[development instructions](../docs/DEVELOPMENT.md) for installation, tests and APK signing.
 
 ## Mechanics migration
 
@@ -37,7 +39,7 @@ events cannot toggle twice. Picking uses the rendered interpolated cube bounds,
 padded touch areas and nearest-centre disambiguation. GUI, animation and AI turns
 block table touches; rings and optional Android haptics confirm selection.
 
-`rules.gd` / `game_state.gd` port `web/engine.js`; shared badge/contract/opponent
+`rules.gd` / `game_state.gd` port `legacy/web/engine.js`; shared badge/contract/opponent
 metadata in `catalog.json` is generated with `node godot/tests/export_catalog.mjs`.
 There is no invented three-pairs/full-house bonus. Oracle fixtures come directly
 from the unchanged JS engine: **34,419 scoring cases, 66 scenarios, 753 state
@@ -84,13 +86,15 @@ godot --path godot --script tests/mobile_ui_smoke.gd # Requires a display
 godot --path godot
 ```
 
-The **Godot table prototype** Actions workflow verifies rule/AI parity, physical
+The **Godot Android** Actions workflow verifies rule/AI parity, physical
 badge effects, stakes, settlement, save/resume, scene integration, repeated native
 touches, GUI blocking, menus and four mobile layouts before exporting/signing the APK with official templates,
-Java 17 and Android SDK. Artifact: `Kosti-Godot-prototype-apk`, Android 7.0+,
+Java 17 and Android SDK. Artifact: `Kosti-u-trakta-apk`, file `Kosti-u-trakta.apk`, Android 7.0+,
 ARM32/ARM64. Package ID differs from the web version, so both apps coexist.
-Debug signing keys currently change per build: uninstall only the previous
-Godot prototype before installing the next APK. Real-device frame rate and
+Without configured signing secrets, debug keys change per build: uninstall only
+the previous Godot app before installing the next APK (this deletes its profile).
+Persistent signing configuration is described in [development instructions](../docs/DEVELOPMENT.md#подпись-apk).
+Real-device frame rate and
 appearance and OS-level touch delivery still need evaluation on Android;
 desktop tests use software OpenGL and synthetic native touch events.
 

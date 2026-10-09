@@ -1,8 +1,8 @@
-; Standalone native prototype. Open this directory in Godot 4.6.3.
+; Main native game. Open this directory in Godot 4.6.3.
 config_version=5
 
 [application]
-config/name="Кости у тракта · Прототип"
+config/name="Кости у тракта"
 run/main_scene="res://table.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 

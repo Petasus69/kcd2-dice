@@ -1,5 +1,5 @@
 extends RefCounted
-## Port of web/engine.js scoreDice, including ordinary-die badge modifiers.
+## Port of legacy/web/engine.js scoreDice, including ordinary-die badge modifiers.
 ## Every selected die must be part of a scoring group from THIS throw.
 
 static func score_dice(values: Array, badge: Dictionary = {}) -> Variant:

@@ -1,29 +1,118 @@
-name: Test and build Android
+name: Godot Android
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: godot-android-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: 4.6.3
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
-      - run: npm ci
-      - run: npm test
+      - name: Verify archived reference engine
+        run: |
+          npm ci --prefix legacy
+          npm test --prefix legacy
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
-      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - run: bash scripts/build-android.sh
+      - name: Install Android tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.1.0' 'platform-tools'
+      - name: Install Godot and official export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          chmod +x "$RUNNER_TEMP/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          echo "$RUNNER_TEMP/godot-bin" >> "$GITHUB_PATH"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o "$RUNNER_TEMP/templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -j -q "$RUNNER_TEMP/templates.tpz" 'templates/android_debug.apk' 'templates/version.txt' -d "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+      - name: Import, compare JS rules and test native physics
+        run: |
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --editor --import
+          node godot/tests/export_rule_fixtures.mjs "$RUNNER_TEMP/rules-fixtures.json"
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --script tests/rules_parity.gd -- "$RUNNER_TEMP/rules-fixtures.json"
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/physics_smoke.gd
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/game_scene_smoke.gd
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --fixed-fps 90 --script tests/mechanics_smoke.gd
+      - name: Test mobile layout, prop framing and touch controls
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          if ! command -v xvfb-run >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb xauth libgl1-mesa-dri
+          fi
+          xvfb-run -a Godot_v${GODOT_VERSION}-stable_linux.x86_64 --path godot --audio-driver Dummy --script tests/mobile_ui_smoke.gd
+      - name: Configure Android export and build APK
+        shell: bash
+        env:
+          DICE_KEYSTORE_BASE64: ${{ secrets.DICE_KEYSTORE_BASE64 }}
+          DICE_KEY_ALIAS: ${{ secrets.DICE_KEY_ALIAS }}
+          DICE_STORE_PASSWORD: ${{ secrets.DICE_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot" build
+          if [ -n "$DICE_KEYSTORE_BASE64" ]; then
+            if [ -z "$DICE_KEY_ALIAS" ] || [ -z "$DICE_STORE_PASSWORD" ]; then
+              echo 'Persistent signing requires DICE_KEY_ALIAS and DICE_STORE_PASSWORD.' >&2
+              exit 1
+            fi
+            python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'godot-debug.keystore'
+          path.write_bytes(base64.b64decode(''.join(os.environ['DICE_KEYSTORE_BASE64'].split()), validate=True))
+          path.chmod(0o600)
+          PY
+          else
+            keytool -genkeypair -keystore "$RUNNER_TEMP/godot-debug.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+            export DICE_KEY_ALIAS=androiddebugkey DICE_STORE_PASSWORD=android
+            echo 'Development APK: temporary signing key. Configure DICE_KEYSTORE_BASE64, DICE_KEY_ALIAS and DICE_STORE_PASSWORD for update-compatible builds.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          settings = {
+            'android_sdk_path': os.environ['ANDROID_HOME'],
+            'java_sdk_path': os.environ['JAVA_HOME'],
+            'debug_keystore': str(Path(os.environ['RUNNER_TEMP']) / 'godot-debug.keystore'),
+            'debug_keystore_user': os.environ['DICE_KEY_ALIAS'],
+            'debug_keystore_pass': os.environ['DICE_STORE_PASSWORD'],
+          }
+          path = Path.home() / '.config/godot/editor_settings-4.6.tres'
+          path.write_text('[gd_resource type="EditorSettings" format=3]\n[resource]\n' + ''.join(f'export/android/{key} = {json.dumps(value)}\n' for key, value in settings.items()))
+          path.chmod(0o600)
+          PY
+          if ! Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path godot --export-debug Android ../build/Kosti-u-trakta.apk > "$RUNNER_TEMP/godot-export.log" 2>&1; then
+            cat "$RUNNER_TEMP/godot-export.log"
+            echo '### Godot export diagnostics' >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            tail -100 "$RUNNER_TEMP/godot-export.log" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/godot-export.log"
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify build/Kosti-u-trakta.apk
       - uses: actions/upload-artifact@v6
         with:
-          name: Kosti-u-trakta-development-apk
+          name: Kosti-u-trakta-apk
           path: build/Kosti-u-trakta.apk
+          if-no-files-found: error
