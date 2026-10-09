@@ -6,7 +6,9 @@ const WOOD = preload("res://wood.gdshader")
 const BOARD = preload("res://board.gdshader")
 const GameState = preload("res://game_state.gd")
 const SERIF = preload("res://assets/serif.ttf")
-const TAVERN = preload("res://assets/tavern.jpg")
+const WOOD_GRAIN = preload("res://assets/wood/chair_wood_albedo.jpg")
+const WOOD_NORMAL = preload("res://assets/wood/chair_wood_normal.jpg")
+const WOOD_ROUGHNESS = preload("res://assets/wood/chair_wood_roughness0.jpg")
 var dice: Array[RigidBody3D] = []
 var rng := RandomNumberGenerator.new()
 var camera: Camera3D
@@ -41,6 +43,8 @@ var title_label: Label
 var header_ui: VBoxContainer
 var candle: Node3D
 var candle_light: OmniLight3D
+var candle_fire: MeshInstance3D
+var candle_time := 0.0
 var board_mesh: MeshInstance3D
 const BOARD_HEIGHT := 0.12
 var sandbox_mode := false # Physics-only harness, never enabled in the app.
@@ -288,6 +292,12 @@ func badge_action() -> void:
         checkpoint()
 
 func _process(delta: float) -> void:
+    candle_time += delta
+    if candle_fire != null:
+        var flicker := sin(candle_time * 3.1) * 0.035 + sin(candle_time * 7.7) * 0.02
+        candle_fire.scale = Vector3(1.0 - flicker, 1.0 + flicker, 1.0 - flicker)
+        candle_fire.rotation.z = sin(candle_time * 2.3) * 0.045
+        candle_light.light_energy = 0.9 + flicker
     if testing or sandbox_mode or not match_open or menus.visible or throwing or collecting or game.phase == "over" or game.mode != "ai" or game.active != 1 or ai_acting:
         ai_wait = 0.0
         return
@@ -381,22 +391,18 @@ func collision_box(size: Vector3, at: Vector3) -> StaticBody3D:
 
 func build_table() -> void:
     var tabletop_material := wood()
-    # Only the clean wood portion of our existing generated artwork is used.
-    var source := TAVERN.get_image()
-    var region := Rect2i(int(source.get_width() * 0.18), int(source.get_height() * 0.40),
-        int(source.get_width() * 0.70), int(source.get_height() * 0.50))
-    var grain := source.get_region(region)
-    grain.generate_mipmaps()
-    tabletop_material.set_shader_parameter("table_grain", ImageTexture.create_from_image(grain))
-    var normal_image := grain.duplicate() as Image
-    normal_image.bump_map_to_normal_map(1.5)
-    normal_image.generate_mipmaps()
-    tabletop_material.set_shader_parameter("table_normal", ImageTexture.create_from_image(normal_image))
+    tabletop_material.set_shader_parameter("wood_color", Color(0.47, 0.34, 0.22))
+    tabletop_material.set_shader_parameter("table_grain", WOOD_GRAIN)
+    tabletop_material.set_shader_parameter("table_normal", WOOD_NORMAL)
+    tabletop_material.set_shader_parameter("table_roughness", WOOD_ROUGHNESS)
     tabletop_material.set_shader_parameter("use_texture", true)
     box(self, Vector3(40, 0.26, 40), Vector3(0, -0.13, 0), tabletop_material)
     collision_box(Vector3(16, 0.3, 14), Vector3(0, -0.15, 0))
     var board_material := ShaderMaterial.new()
     board_material.shader = BOARD
+    board_material.set_shader_parameter("grain_map", WOOD_GRAIN)
+    board_material.set_shader_parameter("relief", WOOD_NORMAL)
+    board_material.set_shader_parameter("roughness_map", WOOD_ROUGHNESS)
     board_mesh = box(self, Vector3(5.34, BOARD_HEIGHT, 6.34), Vector3(0, BOARD_HEIGHT * 0.5, 0), board_material)
     collision_box(Vector3(5.34, BOARD_HEIGHT, 6.34), Vector3(0, BOARD_HEIGHT * 0.5, 0))
     # Low wooden edging; tall invisible continuation prevents escaped dice.
@@ -420,13 +426,13 @@ func build_lighting() -> void:
     environment.environment.background_mode = Environment.BG_COLOR
     environment.environment.background_color = Color(0.05, 0.035, 0.02)
     environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    environment.environment.ambient_light_color = Color(0.77, 0.67, 0.51)
-    environment.environment.ambient_light_energy = 0.48
+    environment.environment.ambient_light_color = Color(0.64, 0.72, 0.85)
+    environment.environment.ambient_light_energy = 0.42
     add_child(environment)
     var light := DirectionalLight3D.new()
     light.rotation_degrees = Vector3(-62, -28, 0)
-    light.light_color = Color(1, 0.94, 0.83)
-    light.light_energy = 0.95
+    light.light_color = Color(1, 0.92, 0.78)
+    light.light_energy = 0.85
     light.shadow_enabled = true
     light.directional_shadow_max_distance = 25
     add_child(light)
@@ -456,17 +462,29 @@ func build_props() -> void:
     add_child(candle)
     candle.position = Vector3(-1.95, 0, -3.75)
     cylinder(candle, Vector3(0, 0.07, 0), 0.34, 0.28, 0.14, brass)
-    var wax := plain(Color(0.76, 0.62, 0.39), 0.88)
+    var lip := MeshInstance3D.new()
+    var lip_shape := TorusMesh.new()
+    lip_shape.inner_radius = 0.28
+    lip_shape.outer_radius = 0.34
+    lip.mesh = lip_shape
+    lip.material_override = brass
+    candle.add_child(lip)
+    lip.position.y = 0.14
+    cylinder(candle, Vector3(0, 0.17, 0), 0.23, 0.23, 0.035, brass)
+    var wax := plain(Color(0.84, 0.78, 0.63), 0.86)
     cylinder(candle, Vector3(0, 0.53, 0), 0.19, 0.17, 0.88, wax)
     for i in range(7):
         var angle := i * TAU / 7
         var length := 0.10 + (i % 3) * 0.08
         cylinder(candle, Vector3(cos(angle) * 0.17, 0.97 - length * 0.5, sin(angle) * 0.17),
             0.025, 0.018, length, wax)
-    var flame := plain(Color(1, 0.6, 0.14))
+    cylinder(candle, Vector3(0, 0.995, 0), 0.012, 0.009, 0.065, plain(Color(0.055, 0.025, 0.01)))
+    var flame := plain(Color(1, 0.72, 0.27))
+    flame.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     flame.emission_enabled = true
     flame.emission = Color(1, 0.35, 0.025)
     var fire := MeshInstance3D.new()
+    candle_fire = fire
     var flame_shape := SphereMesh.new()
     flame_shape.radius = 0.075
     flame_shape.height = 0.23
@@ -474,10 +492,28 @@ func build_props() -> void:
     fire.material_override = flame
     candle.add_child(fire)
     fire.position = Vector3(0, 1.08, 0)
-    cylinder(self, Vector3(3.25, 0.38, -1.85), 0.38, 0.43, 0.76, wood(Color(0.17, 0.075, 0.028)))
-    cylinder(self, Vector3(3.25, 0.767, -1.85), 0.37, 0.37, 0.012, plain(Color(0.025, 0.013, 0.005)))
+    var cup := Node3D.new()
+    add_child(cup)
+    cup.position = Vector3(1.75, 0, -3.83)
+    var cup_wood := plain(Color(0.32, 0.20, 0.10), 0.8)
+    cup_wood.albedo_texture = WOOD_GRAIN
+    cup_wood.normal_enabled = true
+    cup_wood.normal_texture = WOOD_NORMAL
+    cup_wood.normal_scale = 0.35
+    cup_wood.uv1_scale = Vector3(2, 0.6, 1)
+    var cup_body := cylinder(cup, Vector3(0, 0.36, 0), 0.33, 0.36, 0.72, cup_wood)
+    (cup_body.mesh as CylinderMesh).cap_top = false
+    var cup_lip := MeshInstance3D.new()
+    var cup_lip_shape := TorusMesh.new()
+    cup_lip_shape.inner_radius = 0.30
+    cup_lip_shape.outer_radius = 0.36
+    cup_lip.mesh = cup_lip_shape
+    cup_lip.material_override = brass
+    cup.add_child(cup_lip)
+    cup_lip.position.y = 0.72
+    cylinder(cup, Vector3(0, 0.695, 0), 0.30, 0.30, 0.012, plain(Color(0.025, 0.013, 0.005)))
     for y in [0.13, 0.66]:
-        cylinder(self, Vector3(3.25, y, -1.85), 0.415, 0.415, 0.085, brass)
+        cylinder(cup, Vector3(0, y, 0), 0.355, 0.355, 0.065, brass)
 
 func build_audio() -> void:
     # Original generated tap. No recordings from KCD2 or online resources.
@@ -661,7 +697,8 @@ func resize_camera() -> void:
         window.content_scale_size = reference
     var size := get_viewport().get_visible_rect().size
     var aspect := size.x / size.y
-    camera.fov = 50
+    # Leave the tall props below the score cards in landscape.
+    camera.fov = 60 if landscape else 50
     camera.look_at(Vector3(0, 0, 0.8 if landscape else 0.0))
     title_label.visible = not landscape
     header_ui.offset_right = -108

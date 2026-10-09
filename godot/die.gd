@@ -114,7 +114,11 @@ static func make_mesh() -> ArrayMesh:
                     st.add_vertex(c + normal * 0.045)
         var material := StandardMaterial3D.new()
         material.albedo_texture = face_texture(face)
-        material.roughness = 0.57
+        material.normal_enabled = true
+        material.normal_texture = pip_normal(face)
+        material.normal_scale = 0.6
+        material.roughness = 0.65
+        st.generate_tangents()
         st.set_material(material)
         st.commit(mesh)
     return mesh
@@ -127,8 +131,8 @@ static func face_texture(face: int) -> ImageTexture:
         for x in range(192):
             var uv := Vector2(x, y) / 191.0
             var edge: float = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y))
-            var wear: float = 0.035 * rng.randf() + 0.055 * sin(x * 0.07 + sin(y * 0.11))
-            var color := Color(0.55, 0.44, 0.29).lerp(Color(0.80, 0.73, 0.59), clampf(edge * 9.0, 0.0, 1.0))
+            var wear: float = 0.018 * rng.randf() + 0.025 * sin(x * 0.07 + sin(y * 0.11))
+            var color := Color(0.65, 0.59, 0.48).lerp(Color(0.86, 0.83, 0.74), clampf(edge * 9.0, 0.0, 1.0))
             color *= 1.0 - wear
             for pip in PIPS[face]:
                 var distance: float = uv.distance_to(Vector2(0.5, 0.5) + pip * 0.245)
@@ -137,5 +141,22 @@ static func face_texture(face: int) -> ImageTexture:
                 elif distance < 0.078:
                     color *= 0.87
             image.set_pixel(x, y, color)
+    image.generate_mipmaps()
+    return ImageTexture.create_from_image(image)
+
+static func pip_normal(face: int) -> ImageTexture:
+    # Shallow concave engraving; flat normals elsewhere. Shared by all dice.
+    var image := Image.create(192, 192, false, Image.FORMAT_RGB8)
+    for y in range(192):
+        for x in range(192):
+            var uv := Vector2(x, y) / 191.0
+            var normal := Vector3(0, 0, 1)
+            for pip in PIPS[face]:
+                var offset: Vector2 = uv - (Vector2(0.5, 0.5) + pip * 0.245)
+                var radius := offset.length() / 0.078
+                if radius < 1.0:
+                    var slope := offset / 0.078 * (1.0 - radius * radius) * 1.7
+                    normal = Vector3(-slope.x, slope.y, 1.0).normalized()
+            image.set_pixel(x, y, Color(normal.x * 0.5 + 0.5, normal.y * 0.5 + 0.5, normal.z * 0.5 + 0.5))
     image.generate_mipmaps()
     return ImageTexture.create_from_image(image)

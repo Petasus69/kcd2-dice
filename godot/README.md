@@ -1,4 +1,4 @@
-# Кости у тракта · Godot 0.3.1
+# Кости у тракта · Godot 0.4.0
 
 This is the main Godot 4.6.3 **Compatibility** project, developed on `main`.
 Open `project.godot` in Godot and press F5. The previous web game is archived in
@@ -60,16 +60,18 @@ cannot settle, the app offers a repeat throw without submitting an ambiguous
 face or losing held dice/turn points. Colliders are boxes; visible edges rounded.
 Tall invisible extensions above the low tray borders prevent lost dice.
 
-The outer oak table has a photographic material and subtle generated normal
-map; the raised playing board is a separate mesh, collision surface and dark
-walnut shader. The candle is fully framed in the tested 360×640, 390×844,
+The outer table and raised walnut tray use separate materials with perpendicular
+grain, color/normal/roughness maps, wear and decorative inlay. Dice have an aged
+bone finish and engraved pip normals. Warm candle flicker and cool ambient fill
+light the scene. The candle is fully framed in the tested 360×640, 390×844,
 844×390 and 667×375 layouts. Both phone orientations are supported; buttons
 retain at least 44px touch targets in those layouts.
 
 Dice meshes/textures, board shader and contact sound are original procedural
-assets. Table wood reuses a crop of our existing generated tavern artwork;
+assets. Wood maps are by Eric Chadwick, © 2021 Wayfair, under CC BY 4.0;
 DejaVu Serif uses `assets/FONT-LICENSE.txt`. No assets are extracted from KCD2.
-No external resources, WebView, Node runtime or network permission in the APK.
+All resources are bundled; no WebView, Node runtime or network permission in the APK.
+See [asset attribution](../docs/ASSETS.md) and the in-game credits for sources and licenses.
 
 ## Run and verify
 

@@ -82,7 +82,18 @@ func home() -> void:
     button("Бляхи и снаряжение", collection)
     button("Правила", rules)
     button("Настройки", settings)
+    button("Об игре и авторы", credits)
     text("Нативная версия · обычные кости. Особые кости пока не перенесены.", 15)
+
+func credits() -> void:
+    return_to_match = false
+    open("ОБ ИГРЕ И АВТОРЫ", "credits")
+    text("Кости у тракта · 0.4.0\nНезависимая игра на Godot, вдохновлённая Kingdom Come: Deliverance II.")
+    text("Дерево: Eric Chadwick, © 2021 Wayfair. Текстуры из ChairDamaskPurplegold, Khronos glTF Sample Assets. Используются с изменёнными оттенками, масштабом и эффектом износа.", 17)
+    text("Лицензия Creative Commons Attribution 4.0 International:\nhttps://creativecommons.org/licenses/by/4.0/", 16)
+    text("Источник:\nhttps://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ChairDamaskPurplegold", 15)
+    text("Шрифт DejaVu Serif: DejaVu fonts team, Bitstream Vera. Лицензии и полный список ресурсов приложены к исходному коду.", 16)
+    button("Назад", home)
 
 func setup() -> void:
     open("НОВАЯ ПАРТИЯ", "setup")
