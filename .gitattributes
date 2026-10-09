@@ -1,0 +1,12 @@
+* text=auto
+
+*.gd text eol=lf
+*.gdshader text eol=lf
+*.gd.uid text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.godot text eol=lf
+*.cfg text eol=lf
+
+# The archived web version should not define this Godot project's language statistics.
+legacy/** linguist-detectable=false
